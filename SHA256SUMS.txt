@@ -1,0 +1,4 @@
+# HostWitness Beta 1.0.0 - SHA-256
+# Verify: sha256sum -c SHA256SUMS.txt
+aa636b0d9dadf8c3d7eb8f8316897f25fe6ed857848419651f6aeb6ffa535bec  HostWitness.exe
+e8b0c12ddf88bd93cd611be34c3a611c8d3ef3408c506614700e0aae408e4256  HostWitness-beta-1.0.0.zip
