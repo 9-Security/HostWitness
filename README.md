@@ -2,7 +2,7 @@
 
 **HostWitness** is a Windows single-host live forensics and activity correlation tool. It collects and correlates processes, network connections, timeline events, and static artifacts on one machine.
 
-This repository is a **Beta release** distribution. It contains only the compiled executable, usage documentation, and file integrity hashes—**no source code**.
+This repository is a **Beta release** distribution. It contains only **usage documentation**—**no source code**, no binaries in the repo. Binaries are distributed via **GitHub Releases**.
 
 ---
 
@@ -16,27 +16,28 @@ This repository is a **Beta release** distribution. It contains only the compile
 
 ## Download and Verification
 
-**Download the executable and zip** from the [Releases](https://github.com/zen9ya0/HostWitness/releases) page of this repository. **SHA256SUMS.txt** is in the repo root for integrity verification.
+**Download the zip** from the [Releases](https://github.com/zen9ya0/HostWitness/releases) page. Each release includes:
 
-| File | Description |
-|------|-------------|
-| **HostWitness.exe** | Single executable (approx. 150+ MB, self-contained) — from Releases |
-| **HostWitness-beta-*.zip** | Compressed archive of the exe — from Releases |
-| **SHA256SUMS.txt** | SHA-256 hashes (in repo) for verifying the files you downloaded |
+- **HostWitness-beta-*.zip** — compressed archive containing **HostWitness.exe** (self-contained, approx. 150+ MB)
+- **A file whose filename is the SHA-256 of HostWitness.exe** (e.g. `a1b2c3...64chars.txt`) — for integrity verification
 
-### How to verify integrity (Windows PowerShell)
+Extract the zip to get **HostWitness.exe**, then verify it matches the hash file in Releases.
 
-After downloading, run in the same folder:
+### How to verify integrity
 
-```powershell
-# Verify exe
-Get-FileHash -Algorithm SHA256 .\HostWitness.exe | Format-List
+After downloading the zip and the hash-named file from Releases, extract the zip, then:
 
-# Verify zip
-Get-FileHash -Algorithm SHA256 .\HostWitness-beta-*.zip | Format-List
+**Linux / WSL:**
+```bash
+sha256sum HostWitness.exe
 ```
+Compare the output with the **filename** of the hash file in Releases (without `.txt`). They must match.
 
-Compare the output `Hash` with the corresponding value in **SHA256SUMS.txt**. If they match, the file has not been modified.
+**Windows PowerShell:**
+```powershell
+(Get-FileHash -Algorithm SHA256 .\HostWitness.exe).Hash
+```
+Compare with the hash file’s **filename** (without `.txt`). They must match.
 
 ---
 
@@ -80,6 +81,6 @@ For detailed usage, see **USAGE.md** in this folder.
 
 ## Version and License
 
-- **Version**: See filename or SHA256SUMS.txt (e.g. 1.0.0-beta)
+- **Version**: See release tag or zip filename (e.g. 1.0.0-beta)
 - **Copyright**: Copyright (c) 2026 nine-security Inc.
 - This distribution provides only the executable and documentation; see project or official sources for license terms.
