@@ -16,11 +16,13 @@ This repository is a **Beta release** distribution. It contains only the compile
 
 ## Download and Verification
 
+**Download the executable and zip** from the [Releases](https://github.com/zen9ya0/HostWitness/releases) page of this repository. **SHA256SUMS.txt** is in the repo root for integrity verification.
+
 | File | Description |
 |------|-------------|
-| **HostWitness.exe** | Single executable (approx. 150+ MB, self-contained) |
-| **HostWitness-beta-*.zip** | Compressed archive of the exe for easier download and backup |
-| **SHA256SUMS.txt** | SHA-256 hashes of the above files for integrity verification |
+| **HostWitness.exe** | Single executable (approx. 150+ MB, self-contained) — from Releases |
+| **HostWitness-beta-*.zip** | Compressed archive of the exe — from Releases |
+| **SHA256SUMS.txt** | SHA-256 hashes (in repo) for verifying the files you downloaded |
 
 ### How to verify integrity (Windows PowerShell)
 
