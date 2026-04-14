@@ -4,6 +4,8 @@
 
 This public repository contains **usage documentation only**. **Source code is not published here.** Binaries are distributed as a **zip** on **[GitHub Releases](https://github.com/9-Security/HostWitness/releases)**.
 
+For **where HostWitness fits in incident response**, **field strengths and limits**, and **planned enhancement targets** for upcoming releases, see **[ANALYST_BRIEF.md](ANALYST_BRIEF.md)**.
+
 ---
 
 ## System Requirements
