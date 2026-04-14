@@ -1,0 +1,5 @@
+# Do not commit binaries or archives (Releases only)
+*.zip
+*.exe
+*.pfx
+*.pvk
