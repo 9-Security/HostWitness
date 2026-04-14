@@ -1,0 +1,158 @@
+<UserControl x:Class="WinDFIR.UI.Views.MftView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WinDFIR.UI.Converters">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <local:BoolToInUseLabelConverter x:Key="BoolToInUseLabel"/>
+        <Style x:Key="MftRowStyle" TargetType="DataGridRow">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsInUse}" Value="False">
+                    <Setter Property="Background" Value="#FFEEEEEE"/>
+                    <Setter Property="Foreground" Value="Gray"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+            <Button Content="Load MFT file..." Click="ChooseFile_Click" Padding="8,4" Margin="0,0,10,0"/>
+            <Button Content="Load from Volumes..." Click="LoadFromVolume_Click" Padding="8,4" Margin="0,0,10,0" ToolTip="Load one or more NTFS volumes. Each volume opens in its own tab."/>
+
+            <Button Content="Export CSV..." Click="ExportCsv_Click" Padding="8,4" Margin="0,0,5,0" ToolTip="Export the selected MFT tab to CSV" IsEnabled="{Binding HasSelectedTab}"/>
+            <Button Content="Export JSON..." Click="ExportJson_Click" Padding="8,4" ToolTip="Export the selected MFT tab to JSON" IsEnabled="{Binding HasSelectedTab}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="5">
+            <TextBlock Text="No MFT tables loaded. Use Load from Volumes... or Load MFT file..."
+                       Foreground="Gray"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Tabs.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <TabControl ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}">
+                <TabControl.Style>
+                    <Style TargetType="TabControl">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Tabs.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TabControl.Style>
+                <TabControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Header}"/>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+                <TabControl.ContentTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="Page size:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <ComboBox ItemsSource="{Binding PageSizeOptions}" SelectedItem="{Binding PageSize, Mode=TwoWay}" Width="80" VerticalContentAlignment="Center" Margin="0,0,16,0" ToolTip="Rows per page"/>
+                                    <TextBlock Text="Page" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                    <TextBlock Text="{Binding CurrentPage}" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,2,0"/>
+                                    <TextBlock Text="/" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                    <TextBlock Text="{Binding TotalPages}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Rows" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                    <TextBlock Text="{Binding TotalFilteredCount}" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                    <TextBlock Text="total" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                    <Button Content="First" Click="FirstPage_Click" Padding="6,2" Margin="0,0,4,0" ToolTip="Go to first page"/>
+                                    <Button Content="Prev" Click="PrevPage_Click" Padding="6,2" Margin="0,0,4,0" ToolTip="Go to previous page"/>
+                                    <Button Content="Next" Click="NextPage_Click" Padding="6,2" Margin="0,0,4,0" ToolTip="Go to next page"/>
+                                    <Button Content="Last" Click="LastPage_Click" Padding="6,2" Margin="0,0,16,0" ToolTip="Go to last page"/>
+                                    <TextBlock Text="Jump to" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBox Text="{Binding JumpToPageInput, UpdateSourceTrigger=PropertyChanged}" Width="50" VerticalContentAlignment="Center" Margin="0,0,4,0" ToolTip="Page number"/>
+                                    <Button Content="Go" Click="GoToPage_Click" Padding="8,2" ToolTip="Jump to page"/>
+                                </StackPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="100"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Record:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBox Grid.Column="1" Text="{Binding FilterRecordIndex, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" ToolTip="Filter by record index (substring)"/>
+                                    <TextBlock Grid.Column="2" Text="File name:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBox Grid.Column="3" Text="{Binding FilterFileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" ToolTip="Filter by file name (substring)"/>
+                                    <TextBlock Grid.Column="4" Text="Path:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBox Grid.Column="5" Text="{Binding FilterPath, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" ToolTip="Filter by full path (substring)"/>
+                                    <TextBlock Grid.Column="6" Text="Status:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <ComboBox Grid.Column="7" SelectedIndex="{Binding FilterIsInUseComboIndex, Mode=TwoWay}" Margin="0,0,8,0" ToolTip="All / In use / Deleted">
+                                        <ComboBoxItem Content="All"/>
+                                        <ComboBoxItem Content="In use"/>
+                                        <ComboBoxItem Content="Deleted"/>
+                                    </ComboBox>
+                                    <TextBlock Grid.Column="8" Text="Time-stomp:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <ComboBox Grid.Column="9" SelectedIndex="{Binding FilterTimeStompComboIndex, Mode=TwoWay}" ToolTip="All / Suspect only">
+                                        <ComboBoxItem Content="All"/>
+                                        <ComboBoxItem Content="Suspect only"/>
+                                    </ComboBox>
+                                </Grid>
+                                <TextBlock Text="{Binding Status}" Margin="0,2,0,0" Foreground="Gray"/>
+                                <ProgressBar Height="4"
+                                             Margin="0,6,0,0"
+                                             IsIndeterminate="True"
+                                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                            </StackPanel>
+
+                            <DataGrid Grid.Row="1"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      GridLinesVisibility="All"
+                                      ItemsSource="{Binding PagedEntries}"
+                                      RowStyle="{StaticResource MftRowStyle}"
+                                      EnableRowVirtualization="True"
+                                      EnableColumnVirtualization="False"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      VirtualizingPanel.VirtualizationMode="Recycling">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="220"/>
+                                    <DataGridTextColumn Header="Record" Binding="{Binding RecordIndex}" Width="80"/>
+                                    <DataGridTextColumn Header="File name" Binding="{Binding FileName}" Width="220"/>
+                                    <DataGridTextColumn Header="Full path" Binding="{Binding FullPath}" Width="*" MinWidth="200"/>
+                                    <DataGridTextColumn Header="Created (UTC)" Binding="{Binding CreatedUtc, StringFormat='yyyy-MM-dd HH:mm:ss'}" Width="160"/>
+                                    <DataGridTextColumn Header="Modified (UTC)" Binding="{Binding ModifiedUtc, StringFormat='yyyy-MM-dd HH:mm:ss'}" Width="160"/>
+                                    <DataGridTextColumn Header="Status" Binding="{Binding IsInUse, Converter={StaticResource BoolToInUseLabel}}" Width="70"/>
+                                    <DataGridTextColumn Header="Time-stomp?" Binding="{Binding TimeStompSuspect}" Width="90"/>
+                                    <DataGridTextColumn Header="Directory" Binding="{Binding IsDirectory}" Width="70"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+        </Grid>
+    </Grid>
+</UserControl>

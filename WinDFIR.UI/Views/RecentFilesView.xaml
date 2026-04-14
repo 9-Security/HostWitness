@@ -1,0 +1,77 @@
+<UserControl x:Class="WinDFIR.UI.Views.RecentFilesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="200"/>
+        </Grid.RowDefinitions>
+
+        <!-- Filter Panel -->
+        <GroupBox Grid.Row="0" Header="Filters" Margin="5" Padding="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Start:" VerticalAlignment="Center" Margin="5,0"/>
+                <DatePicker Grid.Column="1" Name="StartDatePicker" SelectedDateChanged="StartDatePicker_SelectedDateChanged" Margin="5,0"/>
+
+                <TextBlock Grid.Column="2" Text="End:" VerticalAlignment="Center" Margin="5,0"/>
+                <DatePicker Grid.Column="3" Name="EndDatePicker" SelectedDateChanged="EndDatePicker_SelectedDateChanged" Margin="5,0"/>
+
+                <TextBlock Grid.Column="4" Text="Search:" VerticalAlignment="Center" Margin="5,0"/>
+                <TextBox Grid.Column="5" Name="FilterTextBox" TextChanged="FilterTextBox_TextChanged" Margin="5,0" ToolTip="Search by file name/path/source"/>
+
+                <Button Grid.Column="6" Content="Clear" Click="ClearButton_Click" Margin="5,0"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Recent Files -->
+        <DataGrid Name="RecentFilesDataGrid"
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  GridLinesVisibility="All"
+                  SelectionMode="Single"
+                  SelectedItem="{Binding SelectedItem}"
+                  SelectionChanged="RecentFilesDataGrid_SelectionChanged">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp, StringFormat='yyyy-MM-dd HH:mm:ss.fff'}" Width="180"/>
+                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="140"/>
+                <DataGridTextColumn Header="File Name" Binding="{Binding FileName}" Width="240"/>
+                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="500"/>
+                <DataGridTextColumn Header="Ext" Binding="{Binding Extension}" Width="80"/>
+                <DataGridTextColumn Header="MRU" Binding="{Binding MruOrder}" Width="70"/>
+                <DataGridTextColumn Header="Details" Binding="{Binding Details}" Width="*" MinWidth="300"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#FFD0D7E5"/>
+
+        <!-- Event Details -->
+        <GroupBox Grid.Row="3" Header="Event Details" Margin="5" Padding="5">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBox Name="DetailsTextBlock"
+                         IsReadOnly="True"
+                         IsUndoEnabled="False"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Margin="5"
+                         VerticalScrollBarVisibility="Disabled"/>
+            </ScrollViewer>
+        </GroupBox>
+    </Grid>
+</UserControl>

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 正式釋出請用根目錄 publish.cmd：預設 self-contained 單檔（-r win-x64）＋ PublishSingleFile／IncludeAllContentForSelfExtract。PublishTrimmed 可能影響 WPF，建議先不啟用。LOGOS 僅引用 icon.ico 與程式圖案.png。 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <ApplicationIcon>..\LOGOS\icon.ico</ApplicationIcon>
+    <AssemblyName>HostWitness</AssemblyName>
+    <RootNamespace>WinDFIR.UI</RootNamespace>
+    <!-- Exe "Version" tab: Product name, Company, Copyright, File description -->
+    <Product>HostWitness</Product>
+    <Company>nine-security Inc.</Company>
+    <Copyright>Copyright (c) 2026 nine-security Inc.</Copyright>
+    <Description>HostWitness - Single-host live forensics and activity correlation</Description>
+    <!-- Single-file publish: set PublishSingleFile=true when running dotnet publish to produce one exe (WPF verified). -->
+    <PublishSingleFile Condition="'$(PublishSingleFile)' == ''">false</PublishSingleFile>
+    <IncludeAllContentForSelfExtract Condition="'$(IncludeAllContentForSelfExtract)' == ''">false</IncludeAllContentForSelfExtract>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WinDFIR.Core\WinDFIR.Core.csproj" />
+    <ProjectReference Include="..\WinDFIR.Providers\WinDFIR.Providers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\LOGOS\程式圖案.png">
+      <Link>LOGOS\程式圖案.png</Link>
+    </Resource>
+  </ItemGroup>
+
+</Project>

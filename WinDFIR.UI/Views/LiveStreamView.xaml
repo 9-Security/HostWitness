@@ -1,0 +1,64 @@
+<UserControl x:Class="WinDFIR.UI.Views.LiveStreamView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Control Panel -->
+        <GroupBox Grid.Row="0" Header="Live Stream Controls" Margin="5" Padding="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Name="StatusTextBlock" Text="Stopped" VerticalAlignment="Center" Margin="5,0" Foreground="Gray"/>
+                <TextBlock Grid.Column="1" Text="{Binding EventCount, StringFormat='Events: {0}'}" VerticalAlignment="Center" Margin="5,0"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Live Events Stream -->
+        <DataGrid Name="StreamDataGrid"
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  GridLinesVisibility="All"
+                  SelectionMode="Single"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True"
+                  SelectionChanged="StreamDataGrid_SelectionChanged">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp, StringFormat='HH:mm:ss.fff'}" Width="120"/>
+                <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="100"/>
+                <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="100"/>
+                <DataGridTextColumn Header="Summary" Binding="{Binding Summary}" Width="*" MinWidth="200"/>
+                <DataGridTextColumn Header="Subject Process" Binding="{Binding SubjectProcess}" Width="180"/>
+                <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence}" Width="80"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Event Details -->
+        <GroupBox Grid.Row="2" Header="Event Details" Margin="5" Padding="5">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="200">
+                <TextBox Name="DetailsTextBlock"
+                         IsReadOnly="True"
+                         IsUndoEnabled="False"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Margin="5"
+                         VerticalScrollBarVisibility="Disabled"/>
+            </ScrollViewer>
+        </GroupBox>
+    </Grid>
+</UserControl>

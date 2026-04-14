@@ -1,0 +1,225 @@
+﻿{
+    "timestampUtc":  "2026-04-13T13:01:58.0204525Z",
+    "releaseScope":  "ui_core_local",
+    "dotnetVersion":  "8.0.419",
+    "reportPath":  "D:\\cursor\\IR_script\\HostWitness\\Release_Verification\\stable-release-gate_20260413_130158.json",
+    "success":  true,
+    "checks":  {
+                   "build":  {
+                                 "executed":  true,
+                                 "command":  "dotnet build .\\\\WinDFIR.sln -c Release --no-restore -v minimal",
+                                 "details":  [
+
+                                             ],
+                                 "name":  "build",
+                                 "exitCode":  0,
+                                 "skipped":  false,
+                                 "success":  true,
+                                 "error":  null
+                             },
+                   "tests":  {
+                                 "executed":  true,
+                                 "command":  "dotnet test .\\\\WinDFIR.sln -c Release --no-restore",
+                                 "details":  [
+
+                                             ],
+                                 "name":  "tests",
+                                 "exitCode":  0,
+                                 "skipped":  false,
+                                 "success":  true,
+                                 "error":  null
+                             },
+                   "docs":  {
+                                "executed":  true,
+                                "command":  null,
+                                "details":  [
+                                                {
+                                                    "path":  "README.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "Stable gate",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "InvokeStableReleaseGate.ps1",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\README.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "StableReleaseVerificationMatrix.md",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "StableReleaseChecklist.md",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "StableReleaseVerificationRecordTemplate.md",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "StableReleaseManualVerificationRunbook.md",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "StableOperatorProfileAndSOP.md",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\LIMITATIONS.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "collectionSummary",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "artifactCopyWarningCount",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\StableReleaseVerificationMatrix.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "UI/Core local stable scope",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Windows 10",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Windows 11",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Admin",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "VSS unavailable",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Release Gate",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\StableReleaseChecklist.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "Automated Gate",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Manual Verification Matrix",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Known Limitations",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Verification Record",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\StableReleaseVerificationRecordTemplate.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "Stable Release Verification Record",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Automated Gate",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Manual Verification Matrix",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Approval",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\StableReleaseManualVerificationRunbook.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "release operator",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Blocked",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Manual matrix execution workflow",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                },
+                                                {
+                                                    "path":  "docs\\\\StableOperatorProfileAndSOP.md",
+                                                    "exists":  true,
+                                                    "success":  true,
+                                                    "markers":  [
+                                                                    {
+                                                                        "value":  "Forensic Strict",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Triage Fast",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "Create Dump",
+                                                                        "present":  true
+                                                                    },
+                                                                    {
+                                                                        "value":  "High-risk isolation",
+                                                                        "present":  true
+                                                                    }
+                                                                ]
+                                                }
+                                            ],
+                                "name":  "docs",
+                                "exitCode":  null,
+                                "skipped":  false,
+                                "success":  true,
+                                "error":  null
+                            }
+               },
+    "manualFollowUp":  [
+                           "Run the manual matrix in docs/StableReleaseVerificationMatrix.md.",
+                           "Complete docs/StableReleaseChecklist.md.",
+                           "Attach this JSON report to the release verification record."
+                       ]
+}

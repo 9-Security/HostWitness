@@ -1,0 +1,46 @@
+<UserControl x:Class="WinDFIR.UI.Views.LiveTcpView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
+            <TextBlock Text="Filter" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox Name="FilterTextBox" Width="220" TextChanged="FilterTextBox_TextChanged" Margin="0,0,8,0"/>
+            <TextBlock Text="{Binding Connections.Count, StringFormat='Connections: {0}'}" VerticalAlignment="Center" Foreground="Gray"/>
+        </StackPanel>
+
+        <DataGrid Grid.Row="1"
+                  Name="ConnectionsDataGrid"
+                  ItemsSource="{Binding Connections}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True"
+                  GridLinesVisibility="All">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Process Name" Binding="{Binding ProcessName}" Width="160"/>
+                <DataGridTextColumn Header="Process ID" Binding="{Binding ProcessId}" Width="90"/>
+                <DataGridTextColumn Header="Protocol" Binding="{Binding Protocol}" Width="80"/>
+                <DataGridTextColumn Header="State" Binding="{Binding State}" Width="110"/>
+                <DataGridTextColumn Header="Local Address" Binding="{Binding LocalAddressDisplay}" Width="160"/>
+                <DataGridTextColumn Header="Local Port" Binding="{Binding LocalPort}" Width="90"/>
+                <DataGridTextColumn Header="Remote Address" Binding="{Binding RemoteAddressDisplay}" Width="160"/>
+                <DataGridTextColumn Header="Remote Port" Binding="{Binding RemotePort}" Width="90"/>
+                <DataGridTextColumn Header="Create Time" Binding="{Binding CreateTime, StringFormat='HH:mm:ss'}" Width="110"/>
+                <DataGridTextColumn Header="Module Name" Binding="{Binding ModuleName}" Width="140"/>
+                <DataGridTextColumn Header="Sent Packets" Binding="{Binding SentPackets}" Width="110"/>
+                <DataGridTextColumn Header="Recv Packets" Binding="{Binding RecvPackets}" Width="110"/>
+                <DataGridTextColumn Header="Sent Bytes" Binding="{Binding SentBytes}" Width="110"/>
+                <DataGridTextColumn Header="Recv Bytes" Binding="{Binding RecvBytes}" Width="110"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

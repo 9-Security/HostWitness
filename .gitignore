@@ -1,0 +1,51 @@
+# Build / Release output
+Release/
+Release_SingleFile/
+artifacts/
+bin/
+obj/
+
+# Signing (do not commit private keys)
+certs/
+*.pfx
+*.pvk
+
+# User/IDE
+.vs/
+*.user
+*.suo
+
+# NuGet
+packages/
+*.nupkg
+
+# Test
+TestResults/
+*.trx
+*.coverage
+
+# Local build/debug logs (do not commit)
+build_err*.txt
+build_error*.txt
+providers_error*.txt
+publish_diagnostic.log
+providers_publish_diagnostic.log
+ps_build_diag.log
+Release_publish_probe/
+
+# publish.cmd NuGet isolation (local)
+.nuget-appdata/
+
+# Scratch / review
+tmp_phase9_fix_verify/
+tmp_phase9_review/
+
+# Ephemeral / local notes
+_names.txt
+_snippet.txt
+phase2_review_test.log
+sp_build_err.log
+sp_build_out.log
+tmp_direct_build.cmd
+tmp_publish_probe.ps1
+tmp_publish_probe_startprocess.ps1

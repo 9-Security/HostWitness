@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>HostWitness.Agent</AssemblyName>
+    <RootNamespace>WinDFIR.Agent</RootNamespace>
+    <Description>HostWitness headless agent: run collectors and export snapshot (for remote deployment).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinDFIR.Core\WinDFIR.Core.csproj" />
+    <ProjectReference Include="..\WinDFIR.Providers\WinDFIR.Providers.csproj" />
+  </ItemGroup>
+</Project>

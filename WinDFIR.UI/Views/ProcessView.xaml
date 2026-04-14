@@ -1,0 +1,256 @@
+<UserControl x:Class="WinDFIR.UI.Views.ProcessView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:WinDFIR.UI.ViewModels"
+             xmlns:entities="clr-namespace:WinDFIR.Core.Entities;assembly=WinDFIR.Core"
+             xmlns:converters="clr-namespace:WinDFIR.UI.Converters">
+    <UserControl.Resources>
+        <converters:BindingProxy x:Key="ProcessViewProxy" Data="{Binding}"/>
+    </UserControl.Resources>
+    <Grid>
+        <!-- Processes -->
+        <GroupBox Header="Processes" Margin="5" Padding="5">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Filter Bar -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
+                    <ComboBox Name="FilterFieldComboBox" Width="150" Margin="0,0,6,0"/>
+                    <ComboBox Name="FilterOperatorComboBox" Width="120" Margin="0,0,6,0"/>
+                    <TextBox Name="FilterValueTextBox" Width="220" Margin="0,0,6,0"/>
+                    <ComboBox Name="FilterActionComboBox" Width="110" Margin="0,0,6,0"/>
+                    <TextBlock Text="Join" VerticalAlignment="Center" Margin="6,0,4,0"/>
+                    <ComboBox Name="FilterCombineComboBox" Width="80" Margin="0,0,6,0" SelectionChanged="FilterCombineComboBox_SelectionChanged">
+                        <ComboBoxItem Content="AND"/>
+                        <ComboBoxItem Content="OR"/>
+                    </ComboBox>
+                    <Button Content="Add Filter" Click="AddFilterButton_Click" Padding="10,2" Margin="0,0,6,0"/>
+                    <Button Content="Remove" Click="RemoveFilterButton_Click" Padding="10,2" Margin="0,0,6,0"/>
+                    <Button Content="Clear Filters" Click="ClearFiltersButton_Click" Padding="10,2"/>
+                </StackPanel>
+
+                <!-- Active filter chips only (no border when empty) -->
+                <Border Grid.Row="1"
+                        BorderBrush="#FFC7C7C7"
+                        BorderThickness="1"
+                        Padding="4"
+                        Margin="0,0,0,5"
+                        Visibility="{Binding HasActiveFilters, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Filters}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#FFEFF4FF" BorderBrush="#FF7A9CCF" BorderThickness="1" CornerRadius="2" Margin="0,0,6,4" Padding="6,2">
+                                        <TextBlock>
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0} {1} {2} {3}">
+                                                    <Binding Path="Action"/>
+                                                    <Binding Path="Field"/>
+                                                    <Binding Path="Operator"/>
+                                                    <Binding Path="Value"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Column Selector -->
+                <Expander Grid.Row="2" Header="Columns" Margin="0,0,0,5">
+                    <WrapPanel>
+                        <CheckBox Content="Process Name" IsChecked="{Binding ShowProcessName}" Margin="0,0,12,0"/>
+                        <CheckBox Content="PID" IsChecked="{Binding ShowPid}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Parent PID" IsChecked="{Binding ShowParentPid}" Margin="0,0,12,0"/>
+                        <CheckBox Content="User" IsChecked="{Binding ShowUser}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Integrity" IsChecked="{Binding ShowIntegrity}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Start Time" IsChecked="{Binding ShowStartTime}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Events" IsChecked="{Binding ShowEvents}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Image Path" IsChecked="{Binding ShowImagePath}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Company" IsChecked="{Binding ShowCompany}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Hash" IsChecked="{Binding ShowHash}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Owner SID" IsChecked="{Binding ShowOwnerSid}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Session" IsChecked="{Binding ShowSessionId}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Parent image" IsChecked="{Binding ShowParentImagePath}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Authenticode" IsChecked="{Binding ShowAuthenticode}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Last Operation" IsChecked="{Binding ShowLastOperation}" Margin="0,0,12,0"/>
+                        <CheckBox Content="Last Result" IsChecked="{Binding ShowLastResult}" Margin="0,0,12,0"/>
+                    </WrapPanel>
+                </Expander>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,5">
+                    <TextBlock Name="ProcessCountText" VerticalAlignment="Center" Foreground="Gray" FontSize="11"/>
+                    <ToggleButton Name="ProcessCaptureToggleButton" Click="ProcessCaptureToggleButton_Click" Margin="10,0,0,0" Padding="10,2"/>
+                    <CheckBox Content="Show Process Tree" IsChecked="{Binding ShowProcessTree}" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                    <CheckBox Content="Hide OS Processes" IsChecked="{Binding HideOsProcesses}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <DataGrid Name="ProcessDataGrid"
+                          Grid.Row="4"
+                          ItemsSource="{Binding ProcessTree}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          SelectionMode="Single"
+                          EnableRowVirtualization="True"
+                          EnableColumnVirtualization="True"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          ScrollViewer.CanContentScroll="True"
+                          SelectionChanged="ProcessDataGrid_SelectionChanged"
+                          MouseDoubleClick="ProcessDataGrid_MouseDoubleClick"
+                          GridLinesVisibility="All"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          PreviewMouseRightButtonDown="ProcessDataGrid_PreviewMouseRightButtonDown"
+                          ContextMenuOpening="ProcessDataGrid_ContextMenuOpening"
+                          Visibility="{Binding ShowProcessTree, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Apply as Filter">
+                                <MenuItem Header="Include Process Name" Tag="Include|ProcessName" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Process Name" Tag="Exclude|ProcessName" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include PID" Tag="Include|PID" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude PID" Tag="Exclude|PID" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include Image Path" Tag="Include|ImagePath" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Image Path" Tag="Exclude|ImagePath" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include Company" Tag="Include|Company" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Company" Tag="Exclude|Company" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include Hash" Tag="Include|Hash" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Hash" Tag="Exclude|Hash" Click="ProcessFilterMenuItem_Click"/>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem Header="Copy Value" Name="CopyValueMenuItem" Click="CopyValueMenuItem_Click"/>
+                            <MenuItem Header="Open Directory" Name="OpenDirectoryMenuItem" Click="OpenDirectoryMenuItem_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Create Dump (High-risk)" Name="CreateDumpMenuItem" ToolTip="High-risk: alters process state; not part of default forensic workflow. See LIMITATIONS and StableOperatorProfileAndSOP.">
+                                <MenuItem Header="Create minidump" Name="CreateMinidumpMenuItem" Click="CreateMinidumpMenuItem_Click" ToolTip="Save minidump (stack, modules; smaller file)"/>
+                                <MenuItem Header="Create full dump" Name="CreateFullDumpMenuItem" Click="CreateFullDumpMenuItem_Click" ToolTip="Save full process memory (requires Administrator for other processes; large file)"/>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem Header="Show related events (Drill down)" Name="ShowRelatedEventsMenuItem" Click="ShowRelatedEventsMenuItem_Click" ToolTip="Switch to Timeline and show File/Registry/Network events for this process"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="Background" Value="{Binding LastResult, Converter={StaticResource ResultSeverityToBrushConverter}}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                    <Setter Property="Background" Value="LightYellow"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Process Name" Binding="{Binding ProcessName}" Width="200" MinWidth="160"
+                                            Visibility="{Binding Data.ShowProcessName, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="PID" Binding="{Binding ProcessKey.ProcessId}" Width="80"
+                                            Visibility="{Binding Data.ShowPid, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Parent PID" Binding="{Binding ParentProcessId}" Width="90"
+                                            Visibility="{Binding Data.ShowParentPid, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Parent" Binding="{Binding ParentProcessName}" Width="180"
+                                            Visibility="{Binding Data.ShowProcessTree, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Grandparent" Binding="{Binding GrandparentProcessName}" Width="180"
+                                            Visibility="{Binding Data.ShowProcessTree, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Children" Binding="{Binding ChildProcessNames}" Width="260"
+                                            Visibility="{Binding Data.ShowProcessTree, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="User" Binding="{Binding UserName}" Width="150"
+                                            Visibility="{Binding Data.ShowUser, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Integrity" Binding="{Binding Integrity}" Width="100"
+                                            Visibility="{Binding Data.ShowIntegrity, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Start Time" Binding="{Binding StartTime, StringFormat='HH:mm:ss'}" Width="100"
+                                            Visibility="{Binding Data.ShowStartTime, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Events" Binding="{Binding EventCount}" Width="60"
+                                            Visibility="{Binding Data.ShowEvents, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Image Path" Binding="{Binding ImagePath}" Width="300"
+                                            Visibility="{Binding Data.ShowImagePath, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Company" Binding="{Binding Company}" Width="200"
+                                            Visibility="{Binding Data.ShowCompany, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Hash" Binding="{Binding Hash}" Width="260"
+                                            Visibility="{Binding Data.ShowHash, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Owner SID" Binding="{Binding OwnerSid}" Width="220"
+                                            Visibility="{Binding Data.ShowOwnerSid, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Session" Binding="{Binding SessionId}" Width="70"
+                                            Visibility="{Binding Data.ShowSessionId, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Parent image" Binding="{Binding ParentImagePath}" Width="280"
+                                            Visibility="{Binding Data.ShowParentImagePath, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Authenticode" Binding="{Binding AuthenticodeSummary}" Width="280"
+                                            Visibility="{Binding Data.ShowAuthenticode, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Last Operation" Binding="{Binding LastOperation}" Width="180"
+                                            Visibility="{Binding Data.ShowLastOperation, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <DataGridTextColumn Header="Last Result" Binding="{Binding LastResult}" Width="160"
+                                            Visibility="{Binding Data.ShowLastResult, Source={StaticResource ProcessViewProxy}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TreeView Name="ProcessTreeView"
+                          Grid.Row="4"
+                          ItemsSource="{Binding ProcessTreeRoots}"
+                          Margin="0"
+                          PreviewMouseRightButtonDown="ProcessTreeView_PreviewMouseRightButtonDown"
+                          ContextMenuOpening="ProcessTreeView_ContextMenuOpening"
+                          Visibility="{Binding ShowProcessTree, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TreeView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Apply as Filter">
+                                <MenuItem Header="Include Process Name" Tag="Include|ProcessName" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Process Name" Tag="Exclude|ProcessName" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include PID" Tag="Include|PID" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude PID" Tag="Exclude|PID" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include Image Path" Tag="Include|ImagePath" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Image Path" Tag="Exclude|ImagePath" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include Company" Tag="Include|Company" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Company" Tag="Exclude|Company" Click="ProcessFilterMenuItem_Click"/>
+                                <Separator/>
+                                <MenuItem Header="Include Hash" Tag="Include|Hash" Click="ProcessFilterMenuItem_Click"/>
+                                <MenuItem Header="Exclude Hash" Tag="Exclude|Hash" Click="ProcessFilterMenuItem_Click"/>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem Header="Copy Value" Name="TreeCopyValueMenuItem" Click="CopyValueMenuItem_Click"/>
+                            <MenuItem Header="Open Directory" Name="TreeOpenDirectoryMenuItem" Click="OpenDirectoryMenuItem_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Create Dump (High-risk)" Name="TreeCreateDumpMenuItem" ToolTip="High-risk: alters process state; not part of default forensic workflow. See LIMITATIONS and StableOperatorProfileAndSOP.">
+                                <MenuItem Header="Create minidump" Click="CreateMinidumpMenuItem_Click"/>
+                                <MenuItem Header="Create full dump" Click="CreateFullDumpMenuItem_Click"/>
+                            </MenuItem>
+                            <Separator/>
+                            <MenuItem Header="Show related events (Drill down)" Click="ShowRelatedEventsMenuItem_Click"/>
+                        </ContextMenu>
+                    </TreeView.ContextMenu>
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold"/>
+                                <TextBlock Text=" (PID " Foreground="Gray"/>
+                                <TextBlock Text="{Binding ProcessKey.ProcessId}" Foreground="Gray"/>
+                                <TextBlock Text=")" Foreground="Gray"/>
+                                <TextBlock Text="  " />
+                                <TextBlock Text="{Binding UserName}" Foreground="#2B579A"/>
+                                <TextBlock Text="  " />
+                                <TextBlock Text="{Binding ImagePath}" Foreground="DarkSlateGray"/>
+                            </StackPanel>
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </Grid>
+        </GroupBox>
+    </Grid>
+</UserControl>

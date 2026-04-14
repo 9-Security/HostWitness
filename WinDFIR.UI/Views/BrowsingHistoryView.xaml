@@ -1,0 +1,79 @@
+<UserControl x:Class="WinDFIR.UI.Views.BrowsingHistoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="5"/>
+            <RowDefinition Height="200"/>
+        </Grid.RowDefinitions>
+
+        <!-- Filter Panel -->
+        <GroupBox Grid.Row="0" Header="Filters" Margin="5" Padding="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Start:" VerticalAlignment="Center" Margin="5,0"/>
+                <DatePicker Grid.Column="1" Name="StartDatePicker" SelectedDateChanged="StartDatePicker_SelectedDateChanged" Margin="5,0"/>
+
+                <TextBlock Grid.Column="2" Text="End:" VerticalAlignment="Center" Margin="5,0"/>
+                <DatePicker Grid.Column="3" Name="EndDatePicker" SelectedDateChanged="EndDatePicker_SelectedDateChanged" Margin="5,0"/>
+
+                <TextBlock Grid.Column="4" Text="Search:" VerticalAlignment="Center" Margin="5,0"/>
+                <TextBox Grid.Column="5" Name="FilterTextBox" TextChanged="FilterTextBox_TextChanged" Margin="5,0" ToolTip="Search by URL or Title"/>
+
+                <Button Grid.Column="6" Content="Clear" Click="ClearButton_Click" Margin="5,0"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Browser History Events -->
+        <DataGrid Name="HistoryDataGrid"
+                  Grid.Row="1"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  GridLinesVisibility="All"
+                  SelectionMode="Single"
+                  SelectedItem="{Binding SelectedEvent}"
+                  SelectionChanged="HistoryDataGrid_SelectionChanged">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Timestamp" Binding="{Binding Timestamp, StringFormat='yyyy-MM-dd HH:mm:ss.fff'}" Width="180"/>
+                <DataGridTextColumn Header="Web Browser" Binding="{Binding Fields[WebBrowser]}" Width="120"/>
+                <DataGridTextColumn Header="User Profile" Binding="{Binding Fields[UserProfile]}" Width="100"/>
+                <DataGridTextColumn Header="Visit Type" Binding="{Binding Fields[VisitType]}" Width="100"/>
+                <DataGridTextColumn Header="URL" Binding="{Binding ObjectUrl}" Width="*" MinWidth="200"/>
+                <DataGridTextColumn Header="Title" Binding="{Binding Fields[Title]}" Width="220"/>
+                <DataGridTextColumn Header="Visit Count" Binding="{Binding Fields[VisitCount]}" Width="80"/>
+                <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence}" Width="80"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Splitter -->
+        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="#DDDDDD" ShowsPreview="True"/>
+
+        <!-- Event Details -->
+        <GroupBox Grid.Row="3" Header="Event Details" Margin="5" Padding="5">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBox Name="DetailsTextBlock"
+                         IsReadOnly="True"
+                         IsUndoEnabled="False"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Margin="5"
+                         VerticalScrollBarVisibility="Disabled"/>
+            </ScrollViewer>
+        </GroupBox>
+    </Grid>
+</UserControl>

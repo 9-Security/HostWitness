@@ -1,0 +1,101 @@
+<Window x:Class="WinDFIR.UI.Views.RegistrySearchDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Registry Search"
+        Height="520" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <GroupBox Grid.Row="0" Header="Default queries (edit optional filters, then Re-run)" Margin="0,0,0,12">
+            <StackPanel Margin="10">
+                <TextBlock Name="DefaultQueriesDescription" Text="Edit Value/Data pattern and Recursive per row; Re-run runs with current values and appends to Timeline."
+                           TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,8"/>
+                <TextBlock Name="OfflineOnlyNotice" Text="Live registry is disabled by policy (forensic default). Use Offline Hive views for registry artifacts."
+                           TextWrapping="Wrap" Foreground="#b45309" Margin="0,0,0,8" Visibility="Collapsed"/>
+                <TextBlock Name="LiveNonForensicNotice" Text="Mode: Live (non-forensic). For forensic use prefer Offline Hive (Settings → Registry use offline only)."
+                           TextWrapping="Wrap" Foreground="#475569" Margin="0,0,0,8" Visibility="Collapsed"/>
+                <DataGrid Name="DefaultQueriesGrid" ItemsSource="{Binding DefaultQueries}" Margin="0,0,0,8"
+                          AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                          HeadersVisibility="Column" RowHeaderWidth="0" MinHeight="100" MaxHeight="160">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" IsReadOnly="True" Width="120"/>
+                        <DataGridTextColumn Header="Key path" Binding="{Binding KeyPath}" IsReadOnly="True" Width="*"/>
+                        <DataGridTextColumn Header="Value pattern" Binding="{Binding ValueNamePattern, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                        <DataGridTextColumn Header="Data pattern" Binding="{Binding DataPattern, UpdateSourceTrigger=PropertyChanged}" Width="90"/>
+                        <DataGridCheckBoxColumn Header="Recursive" Binding="{Binding Recursive, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <Button Name="ReRunDefaultButton" Content="Re-run default queries now" Click="ReRunDefaultButton_Click"
+                        Width="200" HorizontalAlignment="Left" Padding="8,4"/>
+            </StackPanel>
+        </GroupBox>
+
+        <GroupBox Grid.Row="1" Header="Custom query (optional filters)" Margin="0,0,0,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="10">
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Query name" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Name="CustomNameBox" Margin="0,0,0,4" Padding="4,2"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Hive" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" Name="CustomHiveCombo" Width="280" HorizontalAlignment="Left"
+                                  DisplayMemberPath="Label" SelectedValuePath="Hive"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Key path" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Name="CustomKeyPathBox" Margin="0,0,0,4" Padding="4,2"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Value name pattern (regex, optional)" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Name="CustomValuePatternBox" Margin="0,0,0,4" Padding="4,2"
+                                 ToolTip="Filter value names by regex, e.g. ^My"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Data pattern (regex, optional)" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Name="CustomDataPatternBox" Margin="0,0,0,4" Padding="4,2"
+                                 ToolTip="Filter value data by regex"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <CheckBox Name="CustomRecursiveCheck" Content="Recursive (scan subkeys)" IsChecked="False" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button Name="RunCustomButton" Content="Run custom query now" Click="RunCustomButton_Click"
+                            Margin="0,12,0,0" Width="180" HorizontalAlignment="Left" Padding="8,4"/>
+                </StackPanel>
+            </ScrollViewer>
+        </GroupBox>
+
+        <TextBlock Grid.Row="2" Name="StatusText" Text="" Foreground="#64748b" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Close" IsCancel="True" Click="CloseButton_Click" Padding="12,6" MinWidth="80"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,50 @@
+﻿{
+    "timestampUtc":  "2026-03-19T14:16:35.2452201Z",
+    "releaseScope":  "ui_core_local",
+    "dotnetVersion":  "8.0.419",
+    "reportPath":  "D:\\cursor\\IR_script\\HostWitness\\Release_Verification\\stable-release-gate_20260319_141635.json",
+    "success":  false,
+    "checks":  {
+                   "build":  {
+                                 "executed":  true,
+                                 "command":  "dotnet build .\\\\WinDFIR.sln -c Release --no-restore -v minimal",
+                                 "details":  [
+
+                                             ],
+                                 "name":  "build",
+                                 "exitCode":  1,
+                                 "skipped":  false,
+                                 "success":  false,
+                                 "error":  "Command failed."
+                             },
+                   "tests":  {
+                                 "executed":  true,
+                                 "command":  "dotnet test .\\\\WinDFIR.sln -c Release --no-restore",
+                                 "details":  [
+
+                                             ],
+                                 "name":  "tests",
+                                 "exitCode":  1,
+                                 "skipped":  false,
+                                 "success":  false,
+                                 "error":  "Command failed."
+                             },
+                   "docs":  {
+                                "executed":  false,
+                                "command":  null,
+                                "details":  [
+
+                                            ],
+                                "name":  "docs",
+                                "exitCode":  null,
+                                "skipped":  true,
+                                "success":  true,
+                                "error":  "Skipped by caller."
+                            }
+               },
+    "manualFollowUp":  [
+                           "Run the manual matrix in docs/StableReleaseVerificationMatrix.md.",
+                           "Complete docs/StableReleaseChecklist.md.",
+                           "Attach this JSON report to the release verification record."
+                       ]
+}
