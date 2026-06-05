@@ -51,17 +51,41 @@ public static class SnapshotImporter
     private static List<ActivityEvent> LoadEvents(JsonDocument doc, string? evidenceBaseDirectory)
     {
         var events = new List<ActivityEvent>();
+        var evidencePaths = CreateEvidencePaths(evidenceBaseDirectory);
 
         if (doc.RootElement.TryGetProperty("events", out var arr))
         {
             foreach (var ev in arr.EnumerateArray())
             {
-                if (TryParseEvent(ev, evidenceBaseDirectory, out var activityEvent))
+                if (TryParseEvent(ev, evidencePaths, out var activityEvent))
                     events.Add(activityEvent);
             }
         }
 
         return events;
+    }
+
+    /// <summary>Resolved snapshot directory and normalized raw/ prefix for containment checks (computed once per timeline load).</summary>
+    private readonly struct EvidencePaths
+    {
+        public EvidencePaths(string resolvedBaseDirectory, string rawDirectoryWithTrailingSeparator)
+        {
+            ResolvedBaseDirectory = resolvedBaseDirectory;
+            RawDirectoryWithTrailingSeparator = rawDirectoryWithTrailingSeparator;
+        }
+
+        public string ResolvedBaseDirectory { get; }
+        public string RawDirectoryWithTrailingSeparator { get; }
+    }
+
+    private static EvidencePaths? CreateEvidencePaths(string? evidenceBaseDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(evidenceBaseDirectory))
+            return null;
+
+        var resolved = Path.GetFullPath(evidenceBaseDirectory);
+        var rawRoot = EnsureTrailingDirectorySeparator(Path.GetFullPath(Path.Combine(resolved, "raw")));
+        return new EvidencePaths(resolved, rawRoot);
     }
 
     private static string? ResolveTimelinePath(string folderPath)
@@ -73,12 +97,18 @@ public static class SnapshotImporter
 
         try
         {
-            foreach (var sub in Directory.GetDirectories(dir, "snapshot_*").OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+            string? chosen = null;
+            foreach (var sub in Directory.EnumerateDirectories(dir, "snapshot_*"))
             {
                 var inSub = Path.Combine(sub, "timeline.json");
-                if (File.Exists(inSub))
-                    return inSub;
+                if (!File.Exists(inSub))
+                    continue;
+                if (chosen == null || string.Compare(sub, chosen, StringComparison.OrdinalIgnoreCase) < 0)
+                    chosen = sub;
             }
+
+            if (chosen != null)
+                return Path.Combine(chosen, "timeline.json");
         }
         catch
         {
@@ -88,7 +118,7 @@ public static class SnapshotImporter
         return null;
     }
 
-    private static bool TryParseEvent(JsonElement ev, string? evidenceBaseDirectory, out ActivityEvent activityEvent)
+    private static bool TryParseEvent(JsonElement ev, EvidencePaths? evidencePaths, out ActivityEvent activityEvent)
     {
         activityEvent = null!;
 
@@ -127,7 +157,7 @@ public static class SnapshotImporter
             {
                 var source = e.TryGetProperty("source", out var s) ? s.GetString() ?? "" : "";
                 var reference = e.TryGetProperty("reference", out var r) ? r.GetString() ?? "" : "";
-                reference = ResolveEvidenceReference(reference, evidenceBaseDirectory);
+                reference = ResolveEvidenceReference(reference, evidencePaths);
                 var hash = e.TryGetProperty("hash", out var h) ? h.GetString() : null;
                 DateTime? collectedAt = null;
                 if (e.TryGetProperty("collectedAt", out var c) && DateTime.TryParse(c.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var ca))
@@ -155,9 +185,9 @@ public static class SnapshotImporter
         return true;
     }
 
-    private static string ResolveEvidenceReference(string reference, string? evidenceBaseDirectory)
+    private static string ResolveEvidenceReference(string reference, EvidencePaths? paths)
     {
-        if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(evidenceBaseDirectory))
+        if (string.IsNullOrWhiteSpace(reference) || paths is null)
             return reference;
 
         if (!reference.StartsWith("raw/", StringComparison.OrdinalIgnoreCase) &&
@@ -169,18 +199,16 @@ public static class SnapshotImporter
         var normalizedReference = reference
             .Replace('/', Path.DirectorySeparatorChar)
             .Replace('\\', Path.DirectorySeparatorChar);
-        var rawRoot = Path.GetFullPath(Path.Combine(evidenceBaseDirectory, "raw"));
-        var resolvedPath = Path.GetFullPath(Path.Combine(evidenceBaseDirectory, normalizedReference));
-        return IsPathWithinDirectory(resolvedPath, rawRoot)
+        var resolvedPath = Path.GetFullPath(Path.Combine(paths.Value.ResolvedBaseDirectory, normalizedReference));
+        return IsPathWithinDirectory(resolvedPath, paths.Value.RawDirectoryWithTrailingSeparator)
             ? resolvedPath
             : reference;
     }
 
-    private static bool IsPathWithinDirectory(string path, string directory)
+    private static bool IsPathWithinDirectory(string path, string rawDirectoryWithTrailingSeparator)
     {
-        var normalizedDirectory = EnsureTrailingDirectorySeparator(Path.GetFullPath(directory));
         var normalizedPath = Path.GetFullPath(path);
-        return normalizedPath.StartsWith(normalizedDirectory, StringComparison.OrdinalIgnoreCase);
+        return normalizedPath.StartsWith(rawDirectoryWithTrailingSeparator, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string EnsureTrailingDirectorySeparator(string path)
@@ -233,10 +261,40 @@ public static class SnapshotImporter
         var rest = s.Substring(2);
         if (rest == "Unknown")
             return new FileKey(null, null, null, null);
+
+        // Volume+FileId form is exactly "F:{VolumeSerial}:{FileId}". A volume serial never contains a
+        // path separator, so requiring exactly two segments (and a separator-free serial) prevents a
+        // path that merely contains ':' (e.g. a drive letter) from being misread as a volume serial.
         var parts = rest.Split(':');
-        if (parts.Length >= 2 && ulong.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var fileId))
+        if (parts.Length == 2
+            && parts[0].Length > 0
+            && !parts[0].Contains('\\') && !parts[0].Contains('/')
+            && ulong.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var fileId))
+        {
             return new FileKey(parts[0], fileId, null, null);
-        return new FileKey(null, null, rest, null);
+        }
+
+        // Path form. FileKey.ToString() appends a decorative ":{hash[..8]}" suffix when a hash is
+        // present; strip it so the round-tripped Path is not corrupted. The full hash cannot be
+        // recovered from the 8-char prefix and is preserved separately in entities.json / evidence.
+        return new FileKey(null, null, StripDisplayHashSuffix(rest), null);
+    }
+
+    /// <summary>
+    /// Removes the decorative ":{hash[..8]}" suffix that <see cref="FileKey.ToString"/> appends to the
+    /// path form, if present (exactly 8 trailing hex chars after a ':'). Leaves any other path untouched.
+    /// </summary>
+    private static string StripDisplayHashSuffix(string pathWithMaybeHash)
+    {
+        var sep = pathWithMaybeHash.LastIndexOf(':');
+        if (sep <= 0 || pathWithMaybeHash.Length - sep - 1 != 8)
+            return pathWithMaybeHash;
+        for (var i = sep + 1; i < pathWithMaybeHash.Length; i++)
+        {
+            if (!Uri.IsHexDigit(pathWithMaybeHash[i]))
+                return pathWithMaybeHash;
+        }
+        return pathWithMaybeHash[..sep];
     }
 
     private static RegistryKey? ParseRegistryKey(string? s)
@@ -338,7 +396,8 @@ public static class SnapshotImporter
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return TryParseEvent(doc.RootElement, evidenceBaseDirectory, out var ev) ? ev : null;
+            var paths = CreateEvidencePaths(evidenceBaseDirectory);
+            return TryParseEvent(doc.RootElement, paths, out var ev) ? ev : null;
         }
         catch
         {

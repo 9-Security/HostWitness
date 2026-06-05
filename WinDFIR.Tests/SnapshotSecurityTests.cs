@@ -110,6 +110,101 @@ public class SnapshotSecurityTests
     }
 
     [Fact]
+    public async Task VerifyFolderAsync_ReturnsFailed_WhenUndeclaredFilePresent()
+    {
+        var tempDir = CreateTempDirectory("HostWitness_SnapshotUndeclared_");
+        try
+        {
+            var snapshotDir = await ExportSnapshotAsync(tempDir);
+
+            // Plant an artifact in raw/ but do NOT add it to hashes.txt — the classic tamper that an
+            // entries-only verifier would miss.
+            var plantedPath = Path.Combine(snapshotDir, "raw", "prefetch", "INJECTED.pf");
+            await File.WriteAllTextAsync(plantedPath, "malicious");
+
+            var result = await SnapshotIntegrityVerifier.VerifyFolderAsync(snapshotDir);
+
+            Assert.Equal(SnapshotIntegrityStatus.Failed, result.Status);
+            Assert.Contains(result.Issues, issue => issue.Contains("Undeclared file", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            CleanupDirectory(tempDir);
+        }
+    }
+
+    [Fact]
+    public async Task ExportAsync_LeavesNoPartialDirectory_AndMarksComplete()
+    {
+        var tempDir = CreateTempDirectory("HostWitness_SnapshotAtomic_");
+        try
+        {
+            var snapshotDir = await ExportSnapshotAsync(tempDir);
+
+            Assert.DoesNotContain(
+                Directory.GetDirectories(tempDir),
+                path => Path.GetFileName(path).EndsWith(".partial", StringComparison.OrdinalIgnoreCase));
+
+            using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(snapshotDir, "manifest.json")));
+            Assert.True(doc.RootElement.GetProperty("complete").GetBoolean());
+        }
+        finally
+        {
+            CleanupDirectory(tempDir);
+        }
+    }
+
+    [Fact]
+    public void ParseFileKey_RoundTripsPathWithHashSuffix_WithoutCorruptingPath()
+    {
+        var tempDir = CreateTempDirectory("HostWitness_FileKeyRoundTrip_");
+        try
+        {
+            var snapshotDir = Path.Combine(tempDir, "snapshot_demo");
+            Directory.CreateDirectory(snapshotDir);
+
+            // objectFile carries the FileKey.ToString() path+hash form: "F:{path}:{hash[..8]}".
+            File.WriteAllText(Path.Combine(snapshotDir, "timeline.json"), """
+{
+  "events": [
+    {
+      "timestamp": "2026-03-20T00:00:00Z",
+      "category": "File",
+      "action": "Open",
+      "objectFile": "F:C:\\Windows\\System32\\foo.exe:deadbeef",
+      "summary": "round-trip",
+      "evidence": []
+    }
+  ]
+}
+""");
+
+            var loaded = SnapshotImporter.LoadFromFolder(snapshotDir);
+            var evt = loaded.GetEventsByTimeRange(DateTime.MinValue, DateTime.MaxValue).Single();
+
+            Assert.True(evt.ObjectFile.HasValue);
+            Assert.Equal(@"C:\Windows\System32\foo.exe", evt.ObjectFile!.Value.Path);
+        }
+        finally
+        {
+            CleanupDirectory(tempDir);
+        }
+    }
+
+    [Fact]
+    public void FileKeyAndEvidenceRef_ToString_DoNotThrowOnShortOrEmptyHash()
+    {
+        // Hash computation failures yield string.Empty; ToString must not index past the end.
+        var emptyHashKey = new FileKey(null, null, @"C:\x\foo.exe", string.Empty);
+        var shortHashKey = new FileKey(null, null, @"C:\x\foo.exe", "abc");
+        Assert.Equal(@"F:C:\x\foo.exe", emptyHashKey.ToString());
+        Assert.Equal(@"F:C:\x\foo.exe:abc", shortHashKey.ToString());
+
+        var shortEvidence = new EvidenceRef("Prefetch", "ref", "abc");
+        Assert.Contains("SHA256:abc", shortEvidence.ToString());
+    }
+
+    [Fact]
     public async Task ExportAsync_SkipsDisallowedArtifactSource()
     {
         var tempDir = CreateTempDirectory("HostWitness_SnapshotSkipSource_");

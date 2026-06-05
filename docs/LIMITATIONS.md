@@ -48,6 +48,8 @@ Perfect forensic isolation is not achievable on live systems
 
 Snapshot open now verifies `hashes.txt` when present and warns before loading unverified or failed bundles. Imported `raw/` evidence references are also contained to the snapshot `raw/` directory and are no longer resolved outside the bundle.
 
+Snapshot export **fails** (rather than emitting an incomplete `hashes.txt`) if any file under `raw/` cannot be read for SHA-256 hashing after copy, so integrity listing stays consistent with bundle contents.
+
 5. Scope Limitations
 
 The tool is not designed to:
@@ -125,6 +127,6 @@ Offline hive enumeration may emit structured fields for registry-only slices und
 
 ---
 
-*Document last updated: 2026-04-13 (§16 offline BITS/WMI/SRUM registry bounds; sections 9a / 10 / 13: BurstQueue ingest visibility; large export/SQLite stability; MFT partial-source UI clarity); 2026-03-19 (Â§9a / Â§13 note the explicit 100 MB truncation warning and `Load MFT file...` record-size auto-detection); 2026-03-18 (Â§13 MFT now uses per-source tabs, `Load from Volumes...`, and no refresh re-run); 2026-03-17 (Â§13 MFT now uses raw volume â†’ Backup privilege â†’ VSS ordered fallback); 2026-03-16 (Â§9a export/session caps); 2026-03-05 (Â§10a UI queue backpressure, Â§15 export visibility); 2026-02-02 (Â§13 Raw Disk, Â§14 risk mitigations).*
+*Document last updated: 2026-04-14 (§4 snapshot export fails if raw files cannot be hashed for `hashes.txt`); 2026-04-13 (§16 offline BITS/WMI/SRUM registry bounds; sections 9a / 10 / 13: BurstQueue ingest visibility; large export/SQLite stability; MFT partial-source UI clarity); 2026-03-19 (Â§9a / Â§13 note the explicit 100 MB truncation warning and `Load MFT file...` record-size auto-detection); 2026-03-18 (Â§13 MFT now uses per-source tabs, `Load from Volumes...`, and no refresh re-run); 2026-03-17 (Â§13 MFT now uses raw volume â†’ Backup privilege â†’ VSS ordered fallback); 2026-03-16 (Â§9a export/session caps); 2026-03-05 (Â§10a UI queue backpressure, Â§15 export visibility); 2026-02-02 (Â§13 Raw Disk, Â§14 risk mitigations).*
 
 

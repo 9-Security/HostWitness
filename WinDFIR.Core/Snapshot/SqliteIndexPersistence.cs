@@ -21,6 +21,21 @@ public static class SqliteIndexPersistence
     /// <summary>Rows per multi-INSERT batch (must keep total bound parameters under SQLite limits).</summary>
     private const int ExportBatchRowCount = 120;
 
+    /// <summary>
+    /// Deletes an existing database and its WAL/SHM/journal sidecar files before overwriting. A stale
+    /// "-wal"/"-journal" left by a crashed run can otherwise be replayed against the freshly created
+    /// database and corrupt it, so they must be removed together with the main file.
+    /// </summary>
+    private static void DeleteDatabaseFiles(string dbPath)
+    {
+        foreach (var suffix in new[] { "", "-wal", "-shm", "-journal" })
+        {
+            var path = dbPath + suffix;
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
     private static string BuildConnectionString(string dbPath)
     {
         if (string.IsNullOrWhiteSpace(dbPath) || dbPath.IndexOf(';') >= 0)
@@ -32,8 +47,7 @@ public static class SqliteIndexPersistence
     /// <returns>Number of events written.</returns>
     public static int Export(IActivityIndex index, string dbPath)
     {
-        if (File.Exists(dbPath))
-            File.Delete(dbPath);
+        DeleteDatabaseFiles(dbPath);
 
         using var conn = new SqliteConnection(BuildConnectionString(dbPath));
         conn.Open();
@@ -81,6 +95,9 @@ public static class SqliteIndexPersistence
     /// <summary>
     /// Streams events from SQLite within the given time range (inclusive). Optional category filter.
     /// Use this for large databases to avoid one-shot allocations.
+    /// IMPORTANT: the returned sequence owns an open SQLite connection/reader. Enumerate it fully (e.g.
+    /// <c>foreach</c> or <c>ToList()</c>) or dispose the enumerator; abandoning it mid-stream leaks the
+    /// connection and keeps a file lock on the database.
     /// </summary>
     public static IEnumerable<ActivityEvent> EnumerateEventsByTimeRange(string dbPath, DateTime startUtc, DateTime endUtc, string? category = null)
     {
@@ -93,8 +110,8 @@ public static class SqliteIndexPersistence
 
         var startStr = startUtc.ToString("O");
         var endStr = endUtc.ToString("O");
-        var hasCategoryColumn = HasColumn(conn, TableName, ColCategory);
-        var useSqlCategoryFilter = hasCategoryColumn && !string.IsNullOrWhiteSpace(category);
+        // After EnsureSchema, ColCategory is always present (CreateSchema or migration).
+        var useSqlCategoryFilter = !string.IsNullOrWhiteSpace(category);
         var sql = useSqlCategoryFilter
             ? $"SELECT [{ColData}] FROM [{TableName}] WHERE [{ColTimestamp}] >= @start AND [{ColTimestamp}] <= @end AND [{ColCategory}] = @category ORDER BY [{ColTimestamp}]"
             : $"SELECT [{ColData}] FROM [{TableName}] WHERE [{ColTimestamp}] >= @start AND [{ColTimestamp}] <= @end ORDER BY [{ColTimestamp}]";
@@ -112,13 +129,7 @@ public static class SqliteIndexPersistence
             var json = reader.GetString(0);
             var ev = SnapshotImporter.ParseEventFromJson(json);
             if (ev != null)
-            {
-                // Backward compatibility for old DBs without category column.
-                if (string.IsNullOrEmpty(category) ||
-                    useSqlCategoryFilter ||
-                    string.Equals(ev.Category, category, StringComparison.OrdinalIgnoreCase))
-                    yield return ev;
-            }
+                yield return ev;
         }
     }
 
@@ -143,8 +154,7 @@ public static class SqliteIndexPersistence
 
         var startStr = startUtc.ToString("O");
         var endStr = endUtc.ToString("O");
-        var hasCategoryColumn = HasColumn(conn, TableName, ColCategory);
-        var useSqlCategoryFilter = hasCategoryColumn && !string.IsNullOrWhiteSpace(category);
+        var useSqlCategoryFilter = !string.IsNullOrWhiteSpace(category);
         var sql = useSqlCategoryFilter
             ? $"SELECT [{ColData}] FROM [{TableName}] WHERE [{ColTimestamp}] >= @start AND [{ColTimestamp}] <= @end AND [{ColCategory}] = @category ORDER BY [{ColTimestamp}] LIMIT @limit OFFSET @offset"
             : $"SELECT [{ColData}] FROM [{TableName}] WHERE [{ColTimestamp}] >= @start AND [{ColTimestamp}] <= @end ORDER BY [{ColTimestamp}] LIMIT @limit OFFSET @offset";
@@ -163,15 +173,8 @@ public static class SqliteIndexPersistence
         {
             var json = reader.GetString(0);
             var ev = SnapshotImporter.ParseEventFromJson(json);
-            if (ev == null)
-                continue;
-
-            if (string.IsNullOrEmpty(category) ||
-                useSqlCategoryFilter ||
-                string.Equals(ev.Category, category, StringComparison.OrdinalIgnoreCase))
-            {
+            if (ev != null)
                 list.Add(ev);
-            }
         }
 
         return list;
@@ -188,8 +191,7 @@ public static class SqliteIndexPersistence
 
         var startStr = startUtc.ToString("O");
         var endStr = endUtc.ToString("O");
-        var hasCategoryColumn = HasColumn(conn, TableName, ColCategory);
-        var useSqlCategoryFilter = hasCategoryColumn && !string.IsNullOrWhiteSpace(category);
+        var useSqlCategoryFilter = !string.IsNullOrWhiteSpace(category);
         var sql = useSqlCategoryFilter
             ? $"SELECT COUNT(1) FROM [{TableName}] WHERE [{ColTimestamp}] >= @start AND [{ColTimestamp}] <= @end AND [{ColCategory}] = @category"
             : $"SELECT COUNT(1) FROM [{TableName}] WHERE [{ColTimestamp}] >= @start AND [{ColTimestamp}] <= @end";

@@ -50,7 +50,7 @@ public static class ShellLaunchHelper
             return;
         }
 
-        if (!fullPath.StartsWith(baseDir, StringComparison.OrdinalIgnoreCase))
+        if (!IsWithinBaseDirectory(fullPath, baseDir))
         {
             LogFailure(logContext, "path escapes application base");
             return;
@@ -168,6 +168,23 @@ public static class ShellLaunchHelper
             LogFailure(logContext, ex.Message);
             NotifyFailure(owner, "Could not open link:\n" + ex.Message, "Open link");
         }
+    }
+
+    /// <summary>
+    /// True if <paramref name="fullPath"/> is the base directory or sits beneath it. Compares against the
+    /// base with a trailing separator so a sibling whose name merely has the base as a string prefix
+    /// (e.g. base "C:\App" vs "C:\AppEvil\x") cannot pass a naive StartsWith check and escape the base.
+    /// </summary>
+    internal static bool IsWithinBaseDirectory(string fullPath, string baseDir)
+    {
+        if (string.IsNullOrEmpty(baseDir))
+            return false;
+
+        var normalizedBase = baseDir.EndsWith(Path.DirectorySeparatorChar) || baseDir.EndsWith(Path.AltDirectorySeparatorChar)
+            ? baseDir
+            : baseDir + Path.DirectorySeparatorChar;
+
+        return fullPath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSafeShellLocalPath(string fullPath)

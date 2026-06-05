@@ -8,6 +8,15 @@ namespace WinDFIR.Providers.Parsers;
 /// <summary>
 /// DestList entry: StreamName is the hex representation of EntryId for StreamName/EntryId correspondence.
 /// Sort by LastAccessTimeUtc (desc) for MRU ordering credibility.
+///
+/// KNOWN LIMITATION (do not trust for forensic timing without validation): the on-disk DestList format
+/// uses variable-length entries (a fixed header followed by a per-entry path string), and the entry
+/// number that maps to a CFB stream name is a 4-byte field deep in the entry (not the 8-byte value at
+/// offset 0) formatted as hex WITHOUT zero padding. The fixed-size modulo walk and offsets below do not
+/// match that layout, so JumpListProvider's stream-name lookup against these entries does not resolve and
+/// it safely falls back to LNK-derived timestamps. A correct rewrite must parse the v1/v3/v4 layouts
+/// sequentially and be validated against real AutomaticDestinations samples before its timestamps/MRU
+/// order are relied upon. Until then this enrichment is best-effort only.
 /// </summary>
 public class JumpListDestListEntry
 {

@@ -317,6 +317,27 @@ public class BrowserHistoryProvider : IProvider
         }
     }
 
+    /// <summary>
+    /// Deletes a temp DB copy together with the "-wal"/"-shm" sidecars that <see cref="CopySqliteWithWal"/>
+    /// may have produced, so triage runs do not leave orphaned temp files (and stale evidence copies).
+    /// </summary>
+    private static void DeleteTempDatabase(string tempDbPath)
+    {
+        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        {
+            try
+            {
+                var path = tempDbPath + suffix;
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
+
     private static (string Browser, string UserProfile, string BrowserProfile) GetChromiumContext(string historyPath)
     {
         var browser = "Chromium";
@@ -500,15 +521,7 @@ public class BrowserHistoryProvider : IProvider
             }
             finally
             {
-                try
-                {
-                    if (File.Exists(tempDbPath))
-                        File.Delete(tempDbPath);
-                }
-                catch
-                {
-                    // Ignore cleanup errors
-                }
+                DeleteTempDatabase(tempDbPath);
             }
         }
         catch
@@ -577,9 +590,23 @@ public class BrowserHistoryProvider : IProvider
                     if (visitTime <= 0)
                         continue;
 
-                    // Chromium visit_time is microseconds since 1601-01-01 (1us = 10 ticks)
-                    var timestamp = TimeNormalizer.FromFileTime((ulong)(visitTime * 10));
-                    
+                    // Chromium visit_time is microseconds since 1601-01-01 (1us = 10 ticks). A corrupt
+                    // DB can hold values that overflow the multiply or fall outside DateTime's range;
+                    // skip just that row instead of letting the exception abort the entire reader.
+                    DateTime timestamp;
+                    try
+                    {
+                        timestamp = TimeNormalizer.FromFileTime(checked((ulong)visitTime * 10UL));
+                    }
+                    catch (OverflowException)
+                    {
+                        continue;
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        continue;
+                    }
+
                     // Additional validation: skip if timestamp is before 2000-01-01 (likely invalid)
                     if (timestamp < new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc))
                         continue;
@@ -642,15 +669,7 @@ public class BrowserHistoryProvider : IProvider
             finally
             {
                 // Clean up temp file
-                try
-                {
-                    if (File.Exists(tempDbPath))
-                        File.Delete(tempDbPath);
-                }
-                catch
-                {
-                    // Ignore cleanup errors
-                }
+                DeleteTempDatabase(tempDbPath);
             }
         }
         catch

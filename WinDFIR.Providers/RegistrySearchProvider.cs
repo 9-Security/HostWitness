@@ -326,7 +326,10 @@ public class RegistrySearchProvider : IProvider
             System.Diagnostics.Debug.WriteLine($"RegistrySearchProvider GetKeyLastWriteTime: {ex.Message}");
         }
 
-        return DateTime.UtcNow;
+        // Unknown last-write time. Return an explicit sentinel (epoch min, UTC) rather than DateTime.UtcNow:
+        // fabricating the collection time would mis-date the registry artifact onto the live timeline and
+        // create false correlations. A year-0001 timestamp is clearly flagged as "unknown" to the analyst.
+        return DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc);
     }
 
     #endregion

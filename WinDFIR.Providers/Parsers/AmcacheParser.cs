@@ -80,9 +80,9 @@ public static class AmcacheParser
                     pathValue = Path.Combine(rootDir, name);
             }
 
-            var sha1 = GetHexValue(subKey, "SHA1");
+            var sha1 = NormalizeAmcacheSha1(GetHexValue(subKey, "SHA1"));
             if (string.IsNullOrWhiteSpace(sha1))
-                sha1 = GetHexValue(subKey, "Sha1");
+                sha1 = NormalizeAmcacheSha1(GetHexValue(subKey, "Sha1"));
 
             var fileSize = GetLongValue(subKey, "Size");
             if (fileSize == 0)
@@ -151,6 +151,17 @@ public static class AmcacheParser
         }
 
         return value.ValueData?.ToString() ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Amcache stores file SHA1 as a 44-char hex string with a leading "0000" sentinel. Strip it so the
+    /// value is a real 40-char SHA1 that matches hash-based IOC/threat-intel lookups.
+    /// </summary>
+    private static string NormalizeAmcacheSha1(string raw)
+    {
+        if (raw.Length == 44 && raw.StartsWith("0000", StringComparison.OrdinalIgnoreCase))
+            return raw[4..];
+        return raw;
     }
 
     private static string GetHexValue(RegistryKey key, string valueName)

@@ -169,9 +169,12 @@ public static class OfflineRegistryPersistenceEnrichment
         var state = ClassifyStartupApproved(valueRaw);
         fields["StartupApproved_State"] = state;
 
-        if (valueRaw.Length >= 16)
+        // The standard StartupApproved value is 12 bytes: a 4-byte state flag followed by the 8-byte
+        // FILETIME of when the entry was enabled/disabled. The previous ">= 16" guard skipped this
+        // timestamp for virtually all real entries; read it at its fixed offset (4) instead.
+        if (valueRaw.Length >= 12)
         {
-            var ft = BitConverter.ToUInt64(valueRaw, valueRaw.Length - 8);
+            var ft = BitConverter.ToUInt64(valueRaw, 4);
             if (TryFileTimeUtc(ft, out var ts))
                 fields["StartupApproved_LastWriteHintUtc"] = ts.ToString("o", CultureInfo.InvariantCulture);
         }

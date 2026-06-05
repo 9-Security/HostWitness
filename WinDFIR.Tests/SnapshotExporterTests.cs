@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using WinDFIR.Core.Entities;
 using WinDFIR.Core.Index;
 using WinDFIR.Core.Settings;
@@ -14,6 +17,165 @@ namespace WinDFIR.Tests;
 /// </summary>
 public class SnapshotExporterTests
 {
+    [Fact]
+    public async Task ExportAsync_ThrowsOperationCanceled_WhenCancellationIsRequestedBeforeStart()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var index = new InMemoryActivityIndex(10);
+        var exporter = new SnapshotExporter { UseVssSnapshots = false };
+        var tempDir = Path.Combine(Path.GetTempPath(), "HostWitness_ExportCancelStart_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                exporter.ExportAsync(index, tempDir, null, cts.Token));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { /* ignore */ }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExportAsync_ThrowsOperationCanceled_WhenCancelledDuringArtifactCopy()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "HostWitness_ExportCancelArtifact_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var artifactDir = Path.Combine(tempDir, "artifacts");
+            Directory.CreateDirectory(artifactDir);
+
+            var index = new InMemoryActivityIndex(10);
+            const int fileCount = 120;
+            for (var i = 0; i < fileCount; i++)
+            {
+                var p = Path.Combine(artifactDir, $"sample{i}.lnk");
+                await File.WriteAllTextAsync(p, new string('x', 8192));
+                index.AddEvent(new ActivityEvent
+                {
+                    Timestamp = DateTime.UtcNow.AddTicks(i),
+                    Category = "File",
+                    Action = "Open",
+                    Summary = "cancellation mid export",
+                    Evidence = new List<EvidenceRef>
+                    {
+                        new("RecentLnk", p)
+                    }
+                });
+            }
+
+            var outDir = Path.Combine(tempDir, "out");
+            Directory.CreateDirectory(outDir);
+            using var cts = new CancellationTokenSource();
+            var exporter = new SnapshotExporter { UseVssSnapshots = false };
+            var exportTask = Task.Run(() => exporter.ExportAsync(index, outDir, null, cts.Token), CancellationToken.None);
+
+            string? snapshotDir = null;
+            for (var attempt = 0; attempt < 800 && snapshotDir == null; attempt++)
+            {
+                if (Directory.Exists(outDir))
+                {
+                    var dirs = Directory.GetDirectories(outDir);
+                    if (dirs.Length > 0)
+                        snapshotDir = dirs.OrderBy(d => d, StringComparer.OrdinalIgnoreCase).First();
+                }
+
+                await Task.Delay(5);
+            }
+
+            Assert.NotNull(snapshotDir);
+            var rawDir = Path.Combine(snapshotDir, "raw");
+            for (var attempt = 0; attempt < 600; attempt++)
+            {
+                if (Directory.Exists(rawDir))
+                {
+                    var n = Directory.GetFiles(rawDir, "*.lnk", SearchOption.AllDirectories).Length;
+                    if (n >= 3)
+                        break;
+                }
+
+                await Task.Delay(5);
+            }
+
+            cts.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => exportTask);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { /* ignore */ }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExportAsync_HashesTxt_ContainsOneLinePerRawFile()
+    {
+        var index = new InMemoryActivityIndex(10);
+        var exporter = new SnapshotExporter { UseVssSnapshots = false };
+        var tempDir = Path.Combine(Path.GetTempPath(), "HostWitness_HashPerRaw_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var artifactPath = Path.Combine(tempDir, "sample.lnk");
+            await File.WriteAllTextAsync(artifactPath, "demo");
+
+            index.AddEvent(new ActivityEvent
+            {
+                Timestamp = DateTime.UtcNow,
+                Category = "File",
+                Action = "Open",
+                Summary = "hash coverage",
+                Evidence = new List<EvidenceRef>
+                {
+                    new("RecentLnk", artifactPath)
+                }
+            });
+
+            await exporter.ExportAsync(index, tempDir);
+
+            var snapshotDir = Directory.GetDirectories(tempDir)
+                .Single(path => Path.GetFileName(path).StartsWith("snapshot_", StringComparison.OrdinalIgnoreCase));
+            var rawRoot = Path.Combine(snapshotDir, "raw");
+            var rawFileCount = Directory.GetFiles(rawRoot, "*", SearchOption.AllDirectories).Length;
+            Assert.True(rawFileCount > 0);
+
+            var hashesPath = Path.Combine(snapshotDir, "hashes.txt");
+            var lines = await File.ReadAllLinesAsync(hashesPath);
+            var rawHashLines = 0;
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+                    continue;
+
+                var parts = trimmed.Split("  ", 2, StringSplitOptions.None);
+                if (parts.Length != 2)
+                    continue;
+
+                var rel = parts[1].Trim().Replace('\\', '/');
+                if (rel.StartsWith("raw/", StringComparison.OrdinalIgnoreCase))
+                    rawHashLines++;
+            }
+
+            Assert.Equal(rawFileCount, rawHashLines);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { /* ignore */ }
+            }
+        }
+    }
+
     [Fact]
     public async Task ExportAsync_WritesManifest_WithValidMachineSid()
     {

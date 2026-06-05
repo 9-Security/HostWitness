@@ -169,6 +169,9 @@ public class ETWMonitorProvider : IProvider, IProcessCreateCacheStatsProvider, I
             }
 
             _ingestQueue = null;
+            // BlockingCollection owns a SemaphoreSlim; dispose it each Start/Stop cycle to avoid leaking
+            // one per restart. Safe here: CompleteAdding + ingestTask await guarantees no further access.
+            ingestQueue.Dispose();
         }
     }
 

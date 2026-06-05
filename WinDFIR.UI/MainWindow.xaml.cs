@@ -89,6 +89,10 @@ public partial class MainWindow : Window
 
     private bool _allowCloseAfterSessionSave = false;
 
+    // Guards the long-running snapshot/SQLite open & export handlers (all async void) against re-entrancy
+    // from a double-click or repeated Ctrl+O/Ctrl+E while a prior operation is still awaiting.
+    private bool _isLongOpRunning = false;
+
     private DateTime _lastRefreshUtc = DateTime.MinValue;
 
     private DateTime _lastDynamicViewRefreshUtc = DateTime.MinValue;
@@ -522,7 +526,10 @@ public partial class MainWindow : Window
 
         _dynamicViewsRefreshTimer?.Stop();
 
-        // Save layout (position, size, tab selection)
+        // Save layout (position, size, tab selection) — only on the first close pass; Close() below
+        // re-enters this handler and we must not re-read detached-window geometry while they tear down.
+
+        if (!_allowCloseAfterSessionSave)
 
         try
 
@@ -578,7 +585,10 @@ public partial class MainWindow : Window
 
 
 
-        var current = _snapshotIndex ?? _index;
+        // Persist the LIVE index as the restorable session, never an opened read-only snapshot: a snapshot
+        // is already a file on disk, and saving it here would discard this run's live capture (and an empty
+        // snapshot would wrongly clear a previously saved session). Empty live timeline still clears, by design.
+        var current = _index;
 
 
 
@@ -592,6 +602,22 @@ public partial class MainWindow : Window
 
             var stopExceptions = await ProviderLifecycleHelper.StopProvidersAsync(_providers);
             LogProviderLifecycleExceptions("Provider stop on exit failed", stopExceptions);
+
+            // Detach event handlers and dispose providers so post-stop callbacks cannot touch the index
+            // during teardown and any native resources (ETW sessions, file handles) are released. Per-
+            // provider failures must not abort the session save that follows.
+            foreach (var provider in _providers)
+            {
+                try
+                {
+                    provider.EventProduced -= OnEventProduced;
+                    (provider as IDisposable)?.Dispose();
+                }
+                catch (Exception disposeEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Provider dispose on exit failed: {disposeEx.Message}");
+                }
+            }
 
             if (stopExceptions.Count > 0)
             {
@@ -2509,6 +2535,10 @@ public partial class MainWindow : Window
 
     {
 
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
+
         try
 
         {
@@ -2597,6 +2627,12 @@ public partial class MainWindow : Window
 
         }
 
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
+        }
+
     }
 
 
@@ -2628,6 +2664,10 @@ public partial class MainWindow : Window
     private async void ExportToSqliteMenuItem_Click(object sender, RoutedEventArgs e)
 
     {
+
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
 
         try
 
@@ -2673,6 +2713,12 @@ public partial class MainWindow : Window
 
         }
 
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
+        }
+
     }
 
 
@@ -2680,6 +2726,10 @@ public partial class MainWindow : Window
     private async void OpenFromSqliteMenuItem_Click(object sender, RoutedEventArgs e)
 
     {
+
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
 
         try
 
@@ -2792,6 +2842,8 @@ public partial class MainWindow : Window
         {
 
             Mouse.OverrideCursor = null;
+
+            _isLongOpRunning = false;
 
         }
 
@@ -2985,6 +3037,10 @@ public partial class MainWindow : Window
 
     {
 
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
+
         try
 
         {
@@ -3114,6 +3170,12 @@ public partial class MainWindow : Window
 
             MessageBox.Show($"Failed to export snapshot.\n\n{ex.Message}{hint}", "Export Snapshot", MessageBoxButton.OK, MessageBoxImage.Error);
 
+        }
+
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
         }
 
     }

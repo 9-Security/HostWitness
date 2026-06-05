@@ -397,9 +397,9 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
 
             if (userKey is null)
             {
+                // LogonGuid is a GUID, not an "S-1-..." SID, so it could never satisfy TryGetSid — drop it.
                 var sid = TryGetSid(fields, "SubjectUserSid")
-                          ?? TryGetSid(fields, "TargetUserSid")
-                          ?? TryGetSid(fields, "LogonGuid");
+                          ?? TryGetSid(fields, "TargetUserSid");
                 if (!string.IsNullOrWhiteSpace(sid))
                     userKey = TryCreateUserKey(sid);
             }

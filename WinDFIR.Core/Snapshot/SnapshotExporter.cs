@@ -49,42 +49,76 @@ public class SnapshotExporter : ISnapshotExporter
 
     public async Task ExportAsync(IActivityIndex index, string outputDirectory, SnapshotExportOptions? options = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var snapshotDir = Path.Combine(outputDirectory, $"snapshot_{DateTime.UtcNow:yyyyMMdd_HHmmss}");
-        Directory.CreateDirectory(snapshotDir);
 
-        // Create subdirectories
-        var rawDir = Path.Combine(snapshotDir, "raw");
-        Directory.CreateDirectory(rawDir);
-        Directory.CreateDirectory(Path.Combine(rawDir, "evtx"));
-        Directory.CreateDirectory(Path.Combine(rawDir, "prefetch"));
-        Directory.CreateDirectory(Path.Combine(rawDir, "browser"));
-        Directory.CreateDirectory(Path.Combine(rawDir, "lnk"));
+        // Build the bundle in a sibling ".partial" directory and atomically rename to the final name
+        // only after hashes.txt is written. A crash, I/O error, or cancellation mid-export therefore
+        // never leaves a directory that looks like a complete, verifiable snapshot bundle.
+        var workingDir = snapshotDir + ".partial";
+        if (Directory.Exists(workingDir))
+            Directory.Delete(workingDir, recursive: true);
+        Directory.CreateDirectory(workingDir);
 
-        // Load events with a cap to avoid OOM on very large indexes (pre-size list to reduce reallocations).
-        var allEvents = new List<ActivityEvent>(Math.Min(ExportMaxEvents, 8192));
-        foreach (var e in index.GetEventsByTimeRange(DateTime.MinValue, DateTime.MaxValue))
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (allEvents.Count >= ExportMaxEvents)
-                break;
-            allEvents.Add(e);
+            // Create subdirectories
+            var rawDir = Path.Combine(workingDir, "raw");
+            Directory.CreateDirectory(rawDir);
+            Directory.CreateDirectory(Path.Combine(rawDir, "evtx"));
+            Directory.CreateDirectory(Path.Combine(rawDir, "prefetch"));
+            Directory.CreateDirectory(Path.Combine(rawDir, "browser"));
+            Directory.CreateDirectory(Path.Combine(rawDir, "lnk"));
+
+            // Load events with a cap to avoid OOM on very large indexes (pre-size list to reduce reallocations).
+            var allEvents = new List<ActivityEvent>(Math.Min(ExportMaxEvents, 8192));
+            foreach (var e in index.GetEventsByTimeRange(DateTime.MinValue, DateTime.MaxValue))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (allEvents.Count >= ExportMaxEvents)
+                    break;
+                allEvents.Add(e);
+            }
+
+            // Export raw artifacts first so timeline evidence can be rewritten to bundle-local paths.
+            var artifactExport = await ExportRawArtifactsAsync(allEvents, workingDir, rawDir, cancellationToken);
+
+            // Export timeline.json
+            await ExportTimelineAsync(allEvents, workingDir, artifactExport.RewrittenEvidenceReferences, cancellationToken);
+
+            // Export entities.json
+            await ExportEntitiesAsync(allEvents, workingDir, cancellationToken);
+
+            // Export manifest.json (with optional known-risks / ETW extras)
+            var manifestExtras = CreateManifestExtras(options, allEvents, artifactExport);
+            await ExportManifestAsync(workingDir, manifestExtras, cancellationToken);
+
+            // Export hashes.txt (last — its presence plus the atomic rename marks a complete bundle)
+            await ExportHashesAsync(workingDir, cancellationToken);
+
+            if (Directory.Exists(snapshotDir))
+                Directory.Delete(snapshotDir, recursive: true);
+            Directory.Move(workingDir, snapshotDir);
         }
+        catch
+        {
+            TryDeleteDirectory(workingDir);
+            throw;
+        }
+    }
 
-        // Export raw artifacts first so timeline evidence can be rewritten to bundle-local paths.
-        var artifactExport = await ExportRawArtifactsAsync(allEvents, snapshotDir, rawDir, cancellationToken);
-
-        // Export timeline.json
-        await ExportTimelineAsync(allEvents, snapshotDir, artifactExport.RewrittenEvidenceReferences, cancellationToken);
-
-        // Export entities.json
-        await ExportEntitiesAsync(allEvents, snapshotDir, cancellationToken);
-
-        // Export manifest.json (with optional known-risks / ETW extras)
-        var manifestExtras = CreateManifestExtras(options, allEvents, artifactExport);
-        await ExportManifestAsync(snapshotDir, manifestExtras, cancellationToken);
-
-        // Export hashes.txt
-        await ExportHashesAsync(snapshotDir, cancellationToken);
+    private static void TryDeleteDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SnapshotExporter: failed to clean up partial bundle '{directory}': {ex.Message}");
+        }
     }
 
     private static Dictionary<string, object?> CreateManifestExtras(
@@ -292,7 +326,10 @@ public class SnapshotExporter : ISnapshotExporter
                 ["machineSid"] = machineSid,
                 ["osVersion"] = Environment.OSVersion.ToString()
             },
-            ["snapshotFormat"] = "1.0"
+            ["snapshotFormat"] = "1.0",
+            // Written into the working ".partial" dir; the bundle only receives this manifest once the
+            // export reaches the atomic rename, so a present "complete": true is a reliable completeness marker.
+            ["complete"] = true
         };
 
         if (manifestExtras != null)
@@ -325,6 +362,8 @@ public class SnapshotExporter : ISnapshotExporter
         string rawDir,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var copiedFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var rewrittenEvidenceReferences = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         VssSnapshotContext? snapshotContext = null;
@@ -343,7 +382,7 @@ public class SnapshotExporter : ISnapshotExporter
             }
 
             if (pathSet.Count > 0)
-                snapshotContext = new VssSnapshotService().TryCreateContextForPaths(pathSet.ToList(), out artifactCopyWarning);
+                snapshotContext = new VssSnapshotService().TryCreateContextForPaths(pathSet, out artifactCopyWarning);
         }
 
         var usedVssSnapshotForArtifactCopy = snapshotContext != null;
@@ -358,17 +397,7 @@ public class SnapshotExporter : ISnapshotExporter
             {
                 foreach (var evidence in evt.Evidence)
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        return Task.FromResult(CreateArtifactExportResult(
-                            rewrittenEvidenceReferences,
-                            rewrittenEvidenceReferenceCount,
-                            copiedArtifactFileCount,
-                            skippedEvidenceReferenceCount,
-                            failedEvidenceReferenceCount,
-                            usedVssSnapshotForArtifactCopy,
-                            artifactCopyWarning));
-                    }
+                    cancellationToken.ThrowIfCancellationRequested();
 
                     var reference = evidence.Reference;
                     try
@@ -409,6 +438,8 @@ public class SnapshotExporter : ISnapshotExporter
                 }
             }
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         return Task.FromResult(CreateArtifactExportResult(
             rewrittenEvidenceReferences,
@@ -586,16 +617,9 @@ public class SnapshotExporter : ISnapshotExporter
             var rawFiles = Directory.GetFiles(rawDir, "*", SearchOption.AllDirectories);
             foreach (var filePath in rawFiles)
             {
-                try
-                {
-                    var hash = await ComputeFileHashAsync(filePath);
-                    var relativePath = Path.GetRelativePath(snapshotDir, filePath);
-                    hashes.AppendLine($"{hash}  {relativePath}");
-                }
-                catch
-                {
-                    // Skip files we can't hash
-                }
+                var hash = await ComputeFileHashAsync(filePath);
+                var relativePath = Path.GetRelativePath(snapshotDir, filePath);
+                hashes.AppendLine($"{hash}  {relativePath}");
             }
         }
 

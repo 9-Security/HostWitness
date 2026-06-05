@@ -23,7 +23,7 @@ public readonly record struct FileKey
         if (VolumeSerial != null && FileId.HasValue)
             return $"F:{VolumeSerial}:{FileId}";
         if (!string.IsNullOrEmpty(Path))
-            return $"F:{Path}{(Hash != null ? $":{Hash[..8]}" : "")}";
+            return $"F:{Path}{(string.IsNullOrEmpty(Hash) ? "" : $":{Hash[..Math.Min(8, Hash.Length)]}")}";
         return "F:Unknown";
     }
 }

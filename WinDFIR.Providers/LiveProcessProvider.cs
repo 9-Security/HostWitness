@@ -73,6 +73,8 @@ public class LiveProcessProvider : IProvider
         try
         {
             var processes = Process.GetProcesses();
+            try
+            {
             var processDetails = GetProcessDetailsMap();
 
             var currentPids = new HashSet<uint>(processes.Select(p => (uint)p.Id));
@@ -143,6 +145,14 @@ public class LiveProcessProvider : IProvider
                     ProduceProcessStopEvent(processKey);
                     _processCache.Remove(pid);
                 }
+            }
+            }
+            finally
+            {
+                // Process objects hold native OS handles; dispose every one each cycle or the handle
+                // table leaks proportionally to (process count x cycles).
+                foreach (var process in processes)
+                    process.Dispose();
             }
         }
         catch (Exception)
@@ -253,8 +263,11 @@ public class LiveProcessProvider : IProvider
         {
             using var searcher = new ManagementObjectSearcher(
                 "SELECT ProcessId, ParentProcessId, CommandLine, ExecutablePath, CreationDate FROM Win32_Process");
-            foreach (ManagementObject obj in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
             {
+                using (obj)
+                {
                 if (obj["ProcessId"] == null)
                     continue;
 
@@ -287,6 +300,7 @@ public class LiveProcessProvider : IProvider
                 }
 
                 map[pid] = new ProcessDetails(commandLine, executablePath, parentPid, creationTime);
+                }
             }
         }
         catch
@@ -332,8 +346,11 @@ public class LiveProcessProvider : IProvider
         {
             using var searcher = new ManagementObjectSearcher(
                 $"SELECT ParentProcessId, CommandLine, ExecutablePath, CreationDate FROM Win32_Process WHERE ProcessId = {processId}");
-            foreach (ManagementObject obj in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
             {
+                using (obj)
+                {
                 int? parentPid = null;
                 if (obj["ParentProcessId"] != null)
                     parentPid = Convert.ToInt32(obj["ParentProcessId"]);
@@ -348,6 +365,7 @@ public class LiveProcessProvider : IProvider
                     obj["ExecutablePath"]?.ToString(),
                     parentPid,
                     creationUtc);
+                }
             }
         }
         catch
@@ -363,9 +381,11 @@ public class LiveProcessProvider : IProvider
         {
             using var searcher = new ManagementObjectSearcher(
                 $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {processId}");
-            foreach (ManagementObject obj in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
             {
-                return obj["CommandLine"]?.ToString();
+                using (obj)
+                    return obj["CommandLine"]?.ToString();
             }
         }
         catch
@@ -381,9 +401,11 @@ public class LiveProcessProvider : IProvider
         {
             using var searcher = new ManagementObjectSearcher(
                 $"SELECT ExecutablePath FROM Win32_Process WHERE ProcessId = {processId}");
-            foreach (ManagementObject obj in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
             {
-                return obj["ExecutablePath"]?.ToString();
+                using (obj)
+                    return obj["ExecutablePath"]?.ToString();
             }
         }
         catch
@@ -399,9 +421,11 @@ public class LiveProcessProvider : IProvider
         {
             using var searcher = new ManagementObjectSearcher(
                 $"SELECT ParentProcessId FROM Win32_Process WHERE ProcessId = {processId}");
-            foreach (ManagementObject obj in searcher.Get())
+            using var results = searcher.Get();
+            foreach (ManagementObject obj in results)
             {
-                return Convert.ToInt32(obj["ParentProcessId"]);
+                using (obj)
+                    return Convert.ToInt32(obj["ParentProcessId"]);
             }
         }
         catch

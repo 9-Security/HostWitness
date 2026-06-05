@@ -22,6 +22,8 @@ internal static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        try
+        {
         var (outputDir, collectSeconds, enableEtw, providerFilter) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
@@ -40,7 +42,7 @@ internal static class Program
 
         var providers = BuildProviders(settings, enableEtw, providerFilter);
 
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         foreach (var p in providers)
         {
             p.EventProduced += (_, evt) =>
@@ -103,6 +105,15 @@ internal static class Program
 
         Console.WriteLine("Done. Snapshot folder: " + Path.GetFullPath(outputDir));
         return 0;
+        }
+        catch (Exception ex)
+        {
+            // Keep the documented exit-code contract authoritative: any unexpected failure (bad path,
+            // settings load, provider construction, etc.) maps to 1 with a one-line stderr message
+            // rather than an undocumented runtime exit code plus a raw stack trace.
+            Console.Error.WriteLine($"Agent failed: {ex.Message}");
+            return 1;
+        }
     }
 
     private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter) ParseArgs(string[] args)

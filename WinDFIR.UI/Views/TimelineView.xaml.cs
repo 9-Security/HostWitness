@@ -14,6 +14,10 @@ public partial class TimelineView : UserControl
 {
     private readonly TimelineViewModel _viewModel;
 
+    // True while the quick-range buttons push dates into the pickers, so the SelectedDateChanged handlers
+    // do not snap the view model's precise Start/End times back to whole-day boundaries.
+    private bool _suppressDateChanged;
+
     public TimelineView(IActivityIndex index)
     {
         InitializeComponent();
@@ -59,6 +63,8 @@ public partial class TimelineView : UserControl
 
     private void StartDatePicker_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressDateChanged)
+            return;
         if (StartDatePicker.SelectedDate.HasValue)
         {
             _viewModel.StartTime = StartDatePicker.SelectedDate.Value.Date;
@@ -71,6 +77,8 @@ public partial class TimelineView : UserControl
 
     private void EndDatePicker_SelectedDateChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressDateChanged)
+            return;
         if (EndDatePicker.SelectedDate.HasValue)
         {
             _viewModel.EndTime = EndDatePicker.SelectedDate.Value.Date.AddDays(1).AddTicks(-1);
@@ -94,25 +102,37 @@ public partial class TimelineView : UserControl
         Clear();
     }
 
+    private void SyncDatePickersFromViewModel()
+    {
+        _suppressDateChanged = true;
+        try
+        {
+            // Show the day in the pickers but keep the view model's precise (time-of-day) range intact.
+            StartDatePicker.SelectedDate = _viewModel.StartTime?.Date;
+            EndDatePicker.SelectedDate = _viewModel.EndTime?.Date;
+        }
+        finally
+        {
+            _suppressDateChanged = false;
+        }
+    }
+
     private void TimeRangeToday_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.SetTimeRangeToday();
-        StartDatePicker.SelectedDate = _viewModel.StartTime?.Date;
-        EndDatePicker.SelectedDate = _viewModel.EndTime?.Date;
+        SyncDatePickersFromViewModel();
     }
 
     private void TimeRange24h_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.SetTimeRangeLast24Hours();
-        StartDatePicker.SelectedDate = _viewModel.StartTime?.Date;
-        EndDatePicker.SelectedDate = _viewModel.EndTime?.Date;
+        SyncDatePickersFromViewModel();
     }
 
     private void TimeRange7d_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.SetTimeRangeLast7Days();
-        StartDatePicker.SelectedDate = _viewModel.StartTime?.Date;
-        EndDatePicker.SelectedDate = _viewModel.EndTime?.Date;
+        SyncDatePickersFromViewModel();
     }
 
     private void ExportCsv_Click(object sender, RoutedEventArgs e)

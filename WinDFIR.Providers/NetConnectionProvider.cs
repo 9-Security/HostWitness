@@ -229,162 +229,150 @@ public class NetConnectionProvider : IProvider
         EventProduced?.Invoke(this, activityEvent);
     }
 
+    private const uint ERROR_INSUFFICIENT_BUFFER = 122;
+
+    private delegate uint ExtendedTableQuery(IntPtr buffer, ref int bufferSize);
+
+    /// <summary>
+    /// Probes the required size, allocates, and queries an Extended*Table API, retrying when the table
+    /// grew between the size probe and the read (the API returns ERROR_INSUFFICIENT_BUFFER with the new
+    /// size). Returns IntPtr.Zero on failure; on success the caller must FreeHGlobal the returned buffer.
+    /// Connection tables change constantly, so a single-shot probe would routinely lose rows under churn.
+    /// </summary>
+    private static IntPtr AllocAndQueryTable(ExtendedTableQuery query)
+    {
+        var bufferSize = 0;
+        query(IntPtr.Zero, ref bufferSize);
+
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            if (bufferSize <= 0)
+                return IntPtr.Zero;
+
+            var buffer = Marshal.AllocHGlobal(bufferSize);
+            var result = query(buffer, ref bufferSize);
+            if (result == 0)
+                return buffer;
+
+            Marshal.FreeHGlobal(buffer);
+            if (result != ERROR_INSUFFICIENT_BUFFER)
+                return IntPtr.Zero;
+            // bufferSize now holds the larger required size; loop and retry.
+        }
+
+        return IntPtr.Zero;
+    }
+
     private static Dictionary<string, uint> GetTcpPidMap()
     {
         var map = new Dictionary<string, uint>();
-
-        try
-        {
-            var bufferSize = 0;
-            GetExtendedTcpTable(IntPtr.Zero, ref bufferSize, true, AF_INET, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_ALL, 0);
-            var buffer = Marshal.AllocHGlobal(bufferSize);
-            try
-            {
-                var result = GetExtendedTcpTable(buffer, ref bufferSize, true, AF_INET, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_ALL, 0);
-                if (result != 0)
-                    return map;
-
-                var rowCount = Marshal.ReadInt32(buffer);
-                var rowPtr = IntPtr.Add(buffer, sizeof(int));
-                var rowSize = Marshal.SizeOf<MIB_TCPROW_OWNER_PID>();
-
-                for (var i = 0; i < rowCount; i++)
-                {
-                    var row = Marshal.PtrToStructure<MIB_TCPROW_OWNER_PID>(rowPtr);
-                    var localIp = new IPAddress(row.localAddr);
-                    var remoteIp = new IPAddress(row.remoteAddr);
-                    var localPort = ConvertPort(row.localPort);
-                    var remotePort = ConvertPort(row.remotePort);
-                    var key = $"{FormatEndpoint(localIp, localPort)}-{FormatEndpoint(remoteIp, remotePort)}";
-                    map[key] = row.owningPid;
-                    rowPtr = IntPtr.Add(rowPtr, rowSize);
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-        catch
-        {
-            // Ignore failures and return empty map
-        }
-
-        try
-        {
-            var bufferSize = 0;
-            GetExtendedTcpTable(IntPtr.Zero, ref bufferSize, true, AF_INET6, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_ALL, 0);
-            var buffer = Marshal.AllocHGlobal(bufferSize);
-            try
-            {
-                var result = GetExtendedTcpTable(buffer, ref bufferSize, true, AF_INET6, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_ALL, 0);
-                if (result != 0)
-                    return map;
-
-                var rowCount = Marshal.ReadInt32(buffer);
-                var rowPtr = IntPtr.Add(buffer, sizeof(int));
-                var rowSize = Marshal.SizeOf<MIB_TCP6ROW_OWNER_PID>();
-
-                for (var i = 0; i < rowCount; i++)
-                {
-                    var row = Marshal.PtrToStructure<MIB_TCP6ROW_OWNER_PID>(rowPtr);
-                    var localIp = new IPAddress(row.localAddr, row.localScopeId);
-                    var remoteIp = new IPAddress(row.remoteAddr, row.remoteScopeId);
-                    var localPort = ConvertPort(row.localPort);
-                    var remotePort = ConvertPort(row.remotePort);
-                    var key = $"{FormatEndpoint(localIp, localPort)}-{FormatEndpoint(remoteIp, remotePort)}";
-                    map[key] = row.owningPid;
-                    rowPtr = IntPtr.Add(rowPtr, rowSize);
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-        catch
-        {
-            // Ignore failures and return map gathered so far
-        }
-
+        AddTcpRows(map, AF_INET);
+        AddTcpRows(map, AF_INET6);
         return map;
+    }
+
+    private static void AddTcpRows(Dictionary<string, uint> map, int family)
+    {
+        try
+        {
+            var buffer = AllocAndQueryTable(
+                (IntPtr b, ref int s) => GetExtendedTcpTable(b, ref s, true, family, TCP_TABLE_CLASS.TCP_TABLE_OWNER_PID_ALL, 0));
+            if (buffer == IntPtr.Zero)
+                return;
+
+            try
+            {
+                var rowCount = Marshal.ReadInt32(buffer);
+                var rowPtr = IntPtr.Add(buffer, sizeof(int));
+
+                if (family == AF_INET)
+                {
+                    var rowSize = Marshal.SizeOf<MIB_TCPROW_OWNER_PID>();
+                    for (var i = 0; i < rowCount; i++)
+                    {
+                        var row = Marshal.PtrToStructure<MIB_TCPROW_OWNER_PID>(rowPtr);
+                        var key = $"{FormatEndpoint(new IPAddress(row.localAddr), ConvertPort(row.localPort))}-{FormatEndpoint(new IPAddress(row.remoteAddr), ConvertPort(row.remotePort))}";
+                        map[key] = row.owningPid;
+                        rowPtr = IntPtr.Add(rowPtr, rowSize);
+                    }
+                }
+                else
+                {
+                    var rowSize = Marshal.SizeOf<MIB_TCP6ROW_OWNER_PID>();
+                    for (var i = 0; i < rowCount; i++)
+                    {
+                        var row = Marshal.PtrToStructure<MIB_TCP6ROW_OWNER_PID>(rowPtr);
+                        var key = $"{FormatEndpoint(new IPAddress(row.localAddr, row.localScopeId), ConvertPort(row.localPort))}-{FormatEndpoint(new IPAddress(row.remoteAddr, row.remoteScopeId), ConvertPort(row.remotePort))}";
+                        map[key] = row.owningPid;
+                        rowPtr = IntPtr.Add(rowPtr, rowSize);
+                    }
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        catch
+        {
+            // Ignore failures for this address family
+        }
     }
 
     private static Dictionary<string, uint> GetUdpPidMap()
     {
         var map = new Dictionary<string, uint>();
-
-        try
-        {
-            var bufferSize = 0;
-            GetExtendedUdpTable(IntPtr.Zero, ref bufferSize, true, AF_INET, UDP_TABLE_CLASS.UDP_TABLE_OWNER_PID, 0);
-            var buffer = Marshal.AllocHGlobal(bufferSize);
-            try
-            {
-                var result = GetExtendedUdpTable(buffer, ref bufferSize, true, AF_INET, UDP_TABLE_CLASS.UDP_TABLE_OWNER_PID, 0);
-                if (result != 0)
-                    return map;
-
-                var rowCount = Marshal.ReadInt32(buffer);
-                var rowPtr = IntPtr.Add(buffer, sizeof(int));
-                var rowSize = Marshal.SizeOf<MIB_UDPROW_OWNER_PID>();
-
-                for (var i = 0; i < rowCount; i++)
-                {
-                    var row = Marshal.PtrToStructure<MIB_UDPROW_OWNER_PID>(rowPtr);
-                    var localIp = new IPAddress(row.localAddr);
-                    var localPort = ConvertPort(row.localPort);
-                    var key = FormatEndpoint(localIp, localPort);
-                    map[key] = row.owningPid;
-                    rowPtr = IntPtr.Add(rowPtr, rowSize);
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-        catch
-        {
-            // Ignore failures and return empty map
-        }
-
-        try
-        {
-            var bufferSize = 0;
-            GetExtendedUdpTable(IntPtr.Zero, ref bufferSize, true, AF_INET6, UDP_TABLE_CLASS.UDP_TABLE_OWNER_PID, 0);
-            var buffer = Marshal.AllocHGlobal(bufferSize);
-            try
-            {
-                var result = GetExtendedUdpTable(buffer, ref bufferSize, true, AF_INET6, UDP_TABLE_CLASS.UDP_TABLE_OWNER_PID, 0);
-                if (result != 0)
-                    return map;
-
-                var rowCount = Marshal.ReadInt32(buffer);
-                var rowPtr = IntPtr.Add(buffer, sizeof(int));
-                var rowSize = Marshal.SizeOf<MIB_UDP6ROW_OWNER_PID>();
-
-                for (var i = 0; i < rowCount; i++)
-                {
-                    var row = Marshal.PtrToStructure<MIB_UDP6ROW_OWNER_PID>(rowPtr);
-                    var localIp = new IPAddress(row.localAddr, row.localScopeId);
-                    var localPort = ConvertPort(row.localPort);
-                    var key = FormatEndpoint(localIp, localPort);
-                    map[key] = row.owningPid;
-                    rowPtr = IntPtr.Add(rowPtr, rowSize);
-                }
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(buffer);
-            }
-        }
-        catch
-        {
-            // Ignore failures and return map gathered so far
-        }
-
+        AddUdpRows(map, AF_INET);
+        AddUdpRows(map, AF_INET6);
         return map;
+    }
+
+    private static void AddUdpRows(Dictionary<string, uint> map, int family)
+    {
+        try
+        {
+            var buffer = AllocAndQueryTable(
+                (IntPtr b, ref int s) => GetExtendedUdpTable(b, ref s, true, family, UDP_TABLE_CLASS.UDP_TABLE_OWNER_PID, 0));
+            if (buffer == IntPtr.Zero)
+                return;
+
+            try
+            {
+                var rowCount = Marshal.ReadInt32(buffer);
+                var rowPtr = IntPtr.Add(buffer, sizeof(int));
+
+                if (family == AF_INET)
+                {
+                    var rowSize = Marshal.SizeOf<MIB_UDPROW_OWNER_PID>();
+                    for (var i = 0; i < rowCount; i++)
+                    {
+                        var row = Marshal.PtrToStructure<MIB_UDPROW_OWNER_PID>(rowPtr);
+                        var key = FormatEndpoint(new IPAddress(row.localAddr), ConvertPort(row.localPort));
+                        map[key] = row.owningPid;
+                        rowPtr = IntPtr.Add(rowPtr, rowSize);
+                    }
+                }
+                else
+                {
+                    var rowSize = Marshal.SizeOf<MIB_UDP6ROW_OWNER_PID>();
+                    for (var i = 0; i < rowCount; i++)
+                    {
+                        var row = Marshal.PtrToStructure<MIB_UDP6ROW_OWNER_PID>(rowPtr);
+                        var key = FormatEndpoint(new IPAddress(row.localAddr, row.localScopeId), ConvertPort(row.localPort));
+                        map[key] = row.owningPid;
+                        rowPtr = IntPtr.Add(rowPtr, rowSize);
+                    }
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        catch
+        {
+            // Ignore failures for this address family
+        }
     }
 
     private static ushort ConvertPort(uint port)
@@ -395,7 +383,13 @@ public class NetConnectionProvider : IProvider
     private static string FormatEndpoint(IPAddress address, int port)
     {
         if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-            return $"[{address}]:{port}";
+        {
+            // Drop the IPv6 scope id (e.g. "%12"). The live connection table (GetActiveTcpConnections)
+            // does not carry it, so retaining it here would make PID-map keys never match those lookups
+            // and every IPv6 flow would lose its process attribution.
+            var normalized = address.ScopeId != 0 ? new IPAddress(address.GetAddressBytes()) : address;
+            return $"[{normalized}]:{port}";
+        }
         return $"{address}:{port}";
     }
 

@@ -141,7 +141,7 @@ public class BrowsingHistoryViewModel : BaseViewModel
                                 BrowserEvents.Add(evt);
                                 if (hasSelection && newSelection == null &&
                                     evt.Timestamp == selTime && evt.ObjectUrl == selUrl &&
-                                    (!evt.Fields.TryGetValue("RecordId", out var rid) || rid.Equals(selRecordId)))
+                                    (!evt.Fields.TryGetValue("RecordId", out var rid) || Equals(rid, selRecordId)))
                                     newSelection = evt;
                             }
                             if (newSelection != null)

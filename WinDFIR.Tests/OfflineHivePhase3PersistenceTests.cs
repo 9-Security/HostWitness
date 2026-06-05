@@ -186,6 +186,33 @@ public class OfflineHivePhase3PersistenceTests
     }
 
     [Fact]
+    public void StartupApproved_TwelveByteValue_DecodesFileTimeAtOffset4()
+    {
+        var expected = new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        var ftBytes = BitConverter.GetBytes(expected.ToFileTimeUtc());
+        var raw = new byte[12];
+        raw[0] = 0x02; // disabled flag
+        Array.Copy(ftBytes, 0, raw, 4, 8); // FILETIME at offset 4 (the standard 12-byte layout)
+
+        var evts = OfflineHiveRegistryProvider.BuildOfflineRegistryValueEventsForTest(
+            BaseFields(),
+            @"SOFTWARE\k",
+            DateTime.UtcNow,
+            "StartupApprovedRun",
+            @"Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+            "entry",
+            "REG_BINARY",
+            BitConverter.ToString(raw).Replace("-", " "),
+            raw,
+            @"X:\SOFTWARE");
+
+        var e = Assert.Single(evts);
+        Assert.True(e.Fields.ContainsKey("StartupApproved_LastWriteHintUtc"),
+            "12-byte StartupApproved value should decode the offset-4 FILETIME");
+        Assert.Contains("2024-01-02", e.Fields["StartupApproved_LastWriteHintUtc"]?.ToString() ?? "");
+    }
+
+    [Fact]
     public void StartupApproved_EnabledByte_Classified()
     {
         var raw = new byte[] { 0x03, 0x01 };

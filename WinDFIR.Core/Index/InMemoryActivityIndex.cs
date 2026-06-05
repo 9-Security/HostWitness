@@ -51,9 +51,13 @@ public class InMemoryActivityIndex : IActivityIndex
         var id = Interlocked.Increment(ref _nextEventId);
         var indexed = new IndexedEvent(id, activityEvent);
 
-        _allEvents.Enqueue(indexed);
+        // Register the id as active and count it BEFORE publishing to _allEvents. If we enqueued first,
+        // a concurrent EnforceCapacity could dequeue this event before TryAdd ran, fail to remove it
+        // (id not yet present), and then this thread would mark it active — leaving a phantom-active id
+        // whose event is gone from _allEvents (permanent _eventCount drift + secondary-index leak).
         _activeEventIds.TryAdd(id, 0);
         Interlocked.Increment(ref _eventCount);
+        _allEvents.Enqueue(indexed);
 
         // Index by ProcessKey (SubjectProcess)
         if (activityEvent.SubjectProcess.HasValue)

@@ -20,7 +20,7 @@ public readonly record struct EvidenceRef
         CollectedAt = collectedAt ?? DateTime.UtcNow;
     }
 
-    public override string ToString() => Hash != null 
-        ? $"{Source}:{Reference} (SHA256:{Hash[..16]}...)" 
-        : $"{Source}:{Reference}";
+    public override string ToString() => string.IsNullOrEmpty(Hash)
+        ? $"{Source}:{Reference}"
+        : $"{Source}:{Reference} (SHA256:{Hash[..Math.Min(16, Hash.Length)]}...)";
 }

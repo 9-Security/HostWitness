@@ -152,4 +152,34 @@ public class EtwAndIndexPressureTests
         Assert.True(idx.EventCount <= 400);
         Assert.True(idx.EvictedEvents > 0);
     }
+
+    [Fact]
+    public async Task InMemoryActivityIndex_ConcurrentAddAndEvict_KeepsCountConsistentWithLiveEvents()
+    {
+        // Reproduces the add/evict race: with a small cap and many concurrent producers, EventCount
+        // must stay equal to the number of events actually live in _allEvents (no phantom-active ids).
+        var idx = new InMemoryActivityIndex(1000);
+        var t0 = DateTime.UtcNow;
+
+        var tasks = Enumerable.Range(0, 8).Select(thread => Task.Run(() =>
+        {
+            for (var i = 0; i < 5000; i++)
+            {
+                idx.AddEvent(new ActivityEvent
+                {
+                    Timestamp = t0.AddTicks(thread * 100000 + i),
+                    Category = "File",
+                    Action = "Open",
+                    Evidence = new List<EvidenceRef>(),
+                    Summary = $"t{thread}-e{i}"
+                });
+            }
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var liveCount = idx.GetEventsByTimeRange(DateTime.MinValue, DateTime.MaxValue).Count();
+        Assert.True(idx.EventCount <= 1000, $"EventCount {idx.EventCount} exceeded cap");
+        Assert.Equal(idx.EventCount, liveCount);
+    }
 }

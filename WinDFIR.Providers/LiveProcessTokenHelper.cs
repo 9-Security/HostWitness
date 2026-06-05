@@ -161,7 +161,7 @@ internal static class LiveProcessTokenHelper
             0x00002100 => "MediumPlus",
             0x00003000 => "High",
             0x00004000 => "System",
-            0x00005000 => "Protected",
+            0x00007000 => "Protected", // SECURITY_MANDATORY_PROTECTED_PROCESS_RID is 0x7000, not 0x5000
             _ => $"Label({rid})"
         };
     }

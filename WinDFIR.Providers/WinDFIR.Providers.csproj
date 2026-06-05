@@ -14,7 +14,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
-    <PackageReference Include="OpenMcdf" Version="3.1.0" />
+    <PackageReference Include="OpenMcdf" Version="3.1.4" />
     <PackageReference Include="Registry" Version="1.5.1" />
     <PackageReference Include="System.Diagnostics.EventLog" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />

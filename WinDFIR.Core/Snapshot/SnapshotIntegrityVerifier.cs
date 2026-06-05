@@ -81,6 +81,11 @@ public static class SnapshotIntegrityVerifier
             };
         }
 
+        // Track which on-disk files are covered by hashes.txt so we can flag any extra/undeclared
+        // file. Without this cross-check, a tampered bundle could add evidence to raw/ and simply omit
+        // it from hashes.txt to pass verification — a false assurance of completeness for a DFIR tool.
+        var declaredRelativePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var entry in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -92,6 +97,8 @@ public static class SnapshotIntegrityVerifier
                 continue;
             }
 
+            declaredRelativePaths.Add(NormalizeRelativePath(snapshotDirectory, candidatePath));
+
             if (!File.Exists(candidatePath))
             {
                 issues.Add($"Hashed file is missing: {entry.RelativePath}");
@@ -101,6 +108,20 @@ public static class SnapshotIntegrityVerifier
             var actualHash = await ComputeSha256Async(candidatePath, cancellationToken);
             if (!string.Equals(actualHash, entry.Hash, StringComparison.OrdinalIgnoreCase))
                 issues.Add($"Hash mismatch: {entry.RelativePath}");
+        }
+
+        // Reverse check: every file actually present in the bundle must be declared in hashes.txt
+        // (hashes.txt itself is excluded — it is the manifest of hashes, not a hashed artifact).
+        foreach (var presentFile in Directory.EnumerateFiles(snapshotDirectory, "*", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (string.Equals(Path.GetFullPath(presentFile), hashesPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var relative = NormalizeRelativePath(snapshotDirectory, presentFile);
+            if (!declaredRelativePaths.Contains(relative))
+                issues.Add($"Undeclared file not covered by hashes.txt: {relative}");
         }
 
         return new SnapshotIntegrityVerificationResult
@@ -160,6 +181,13 @@ public static class SnapshotIntegrityVerifier
         }
 
         return null;
+    }
+
+    private static string NormalizeRelativePath(string snapshotDirectory, string fullPath)
+    {
+        return Path.GetRelativePath(snapshotDirectory, Path.GetFullPath(fullPath))
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
     }
 
     private static bool IsPathWithinDirectory(string path, string directory)

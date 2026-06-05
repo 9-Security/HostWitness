@@ -153,7 +153,9 @@ public static class LnkParser
 
     private static string ReadNetworkPath(byte[] bytes, long networkStructOffset)
     {
-        if (networkStructOffset + 4 > bytes.Length)
+        // Need at least 12 bytes: size@0, headerSize@4, NetNameOffset@8 (each 4 bytes). Guarding only
+        // +4 let the NetNameOffset read at +8 run past the end of a truncated CommonNetworkRelativeLink.
+        if (networkStructOffset < 0 || networkStructOffset + 12 > bytes.Length)
             return string.Empty;
 
         var netNameOffset = BitConverter.ToUInt32(bytes, (int)networkStructOffset + 8);
