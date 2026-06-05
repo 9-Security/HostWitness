@@ -49,3 +49,5 @@ sp_build_out.log
 tmp_direct_build.cmd
 tmp_publish_probe.ps1
 tmp_publish_probe_startprocess.ps1
+# Local release packaging artifacts
+Release_dist/
