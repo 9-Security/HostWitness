@@ -176,6 +176,8 @@ internal static class Program
             providers.Add(new ScheduledTaskProvider());
         if (IncludeProvider("PowerShellHistory", providerFilter))
             providers.Add(new PowerShellHistoryProvider());
+        if (IncludeProvider("StartupFolder", providerFilter))
+            providers.Add(new StartupFolderProvider());
 
         var allowLiveRegistry = RegistryLivePolicy.IsLiveRegistryEnabled(settings);
         if (!allowLiveRegistry && IncludeProvider("Registry", providerFilter))

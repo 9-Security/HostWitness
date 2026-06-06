@@ -514,6 +514,7 @@ public class SnapshotExporter : ISnapshotExporter
             case "RegistryHive":
             case "ScheduledTask":
             case "PowerShellHistory":
+            case "StartupFolder":
                 artifactSourcePath = evidence.Reference;
                 return Path.IsPathRooted(artifactSourcePath);
             case "BrowserHistory":
@@ -534,6 +535,7 @@ public class SnapshotExporter : ISnapshotExporter
             "RegistryHive" => "registry",
             "ScheduledTask" => "tasks",
             "PowerShellHistory" => "powershell",
+            "StartupFolder" => "startup",
             _ => "other"
         };
     }
@@ -552,6 +554,7 @@ public class SnapshotExporter : ISnapshotExporter
             // Task Scheduler definitions are extensionless under System32\Tasks (some exports use .xml).
             "ScheduledTask" => IsAllowedScheduledTaskFile(path),
             "PowerShellHistory" => fileName.Equals("ConsoleHost_history.txt", StringComparison.OrdinalIgnoreCase),
+            "StartupFolder" => IsAllowedStartupFile(path),
             _ => false
         };
     }
@@ -561,6 +564,15 @@ public class SnapshotExporter : ISnapshotExporter
         var ext = Path.GetExtension(path);
         return string.IsNullOrEmpty(ext) || ext.Equals(".xml", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static readonly HashSet<string> AllowedStartupExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".lnk", ".url", ".exe", ".com", ".scr", ".pif", ".bat", ".cmd",
+        ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".ps1", ".hta", ".jar"
+    };
+
+    private static bool IsAllowedStartupFile(string path) =>
+        AllowedStartupExtensions.Contains(Path.GetExtension(path));
 
     private static bool IsKnownBrowserHistoryFile(string fileName)
     {

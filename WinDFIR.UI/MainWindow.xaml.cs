@@ -188,7 +188,9 @@ public partial class MainWindow : Window
 
             new ScheduledTaskProvider(),
 
-            new PowerShellHistoryProvider()
+            new PowerShellHistoryProvider(),
+
+            new StartupFolderProvider()
 
         };
 
