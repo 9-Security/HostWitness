@@ -172,6 +172,10 @@ internal static class Program
             providers.Add(new JumpListProvider());
         if (IncludeProvider("BrowserHistory", providerFilter))
             providers.Add(new BrowserHistoryProvider());
+        if (IncludeProvider("ScheduledTask", providerFilter))
+            providers.Add(new ScheduledTaskProvider());
+        if (IncludeProvider("PowerShellHistory", providerFilter))
+            providers.Add(new PowerShellHistoryProvider());
 
         var allowLiveRegistry = RegistryLivePolicy.IsLiveRegistryEnabled(settings);
         if (!allowLiveRegistry && IncludeProvider("Registry", providerFilter))

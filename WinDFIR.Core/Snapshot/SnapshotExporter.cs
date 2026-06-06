@@ -512,6 +512,8 @@ public class SnapshotExporter : ISnapshotExporter
             case "RecentLnk":
             case "JumpList":
             case "RegistryHive":
+            case "ScheduledTask":
+            case "PowerShellHistory":
                 artifactSourcePath = evidence.Reference;
                 return Path.IsPathRooted(artifactSourcePath);
             case "BrowserHistory":
@@ -530,6 +532,8 @@ public class SnapshotExporter : ISnapshotExporter
             "BrowserHistory" => "browser",
             "RecentLnk" or "JumpList" => "lnk",
             "RegistryHive" => "registry",
+            "ScheduledTask" => "tasks",
+            "PowerShellHistory" => "powershell",
             _ => "other"
         };
     }
@@ -545,8 +549,17 @@ public class SnapshotExporter : ISnapshotExporter
                           fileName.EndsWith(".customDestinations-ms", StringComparison.OrdinalIgnoreCase),
             "BrowserHistory" => IsKnownBrowserHistoryFile(fileName),
             "RegistryHive" => IsKnownRegistryHiveFile(fileName),
+            // Task Scheduler definitions are extensionless under System32\Tasks (some exports use .xml).
+            "ScheduledTask" => IsAllowedScheduledTaskFile(path),
+            "PowerShellHistory" => fileName.Equals("ConsoleHost_history.txt", StringComparison.OrdinalIgnoreCase),
             _ => false
         };
+    }
+
+    private static bool IsAllowedScheduledTaskFile(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return string.IsNullOrEmpty(ext) || ext.Equals(".xml", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsKnownBrowserHistoryFile(string fileName)

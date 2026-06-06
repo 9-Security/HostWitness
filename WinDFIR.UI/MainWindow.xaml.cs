@@ -184,7 +184,11 @@ public partial class MainWindow : Window
 
             new JumpListProvider(),
 
-            new BrowserHistoryProvider()
+            new BrowserHistoryProvider(),
+
+            new ScheduledTaskProvider(),
+
+            new PowerShellHistoryProvider()
 
         };
 
@@ -2529,6 +2533,8 @@ public partial class MainWindow : Window
 
     private string? _snapshotPath;
 
+    private CollectionTrustReport? _lastTrustReport;
+
 
 
     private async void OpenSnapshotMenuItem_Click(object sender, RoutedEventArgs e)
@@ -2599,6 +2605,9 @@ public partial class MainWindow : Window
 
             CloseSnapshotMenuItem.Visibility = Visibility.Visible;
 
+            _lastTrustReport = CollectionTrustAssessor.AssessFolder(folderPath, integrityResult.Status);
+            CollectionTrustMenuItem.Visibility = Visibility.Visible;
+
             _mainViewModel.SelectedDynamicTabIndex = 0;
 
             if (DynamicTabControl != null)
@@ -2607,7 +2616,7 @@ public partial class MainWindow : Window
 
             UpdateSharedContent();
 
-            MessageBox.Show($"Loaded {(_snapshotIndex is SnapshotActivityIndex sa ? sa.EventCount : 0)} events from snapshot.", "Open Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowCollectionTrust(_lastTrustReport);
 
         }
 
@@ -2859,12 +2868,56 @@ public partial class MainWindow : Window
 
         _snapshotPath = null;
 
+        _lastTrustReport = null;
+
         TimelineViewControl?.SetSnapshotIndex(_index);
 
         CloseSnapshotMenuItem.Visibility = Visibility.Collapsed;
 
+        CollectionTrustMenuItem.Visibility = Visibility.Collapsed;
+
         TimelineViewControl?.Refresh();
 
+    }
+
+    private void CollectionTrustMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastTrustReport == null)
+        {
+            if (string.IsNullOrEmpty(_snapshotPath))
+            {
+                MessageBox.Show("No snapshot is open.", "Collection Trust", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                _lastTrustReport = CollectionTrustAssessor.AssessFolder(_snapshotPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to assess collection trust.\n\n{ex.Message}", "Collection Trust", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+        }
+
+        ShowCollectionTrust(_lastTrustReport);
+    }
+
+    private void ShowCollectionTrust(CollectionTrustReport? report)
+    {
+        if (report == null)
+            return;
+
+        try
+        {
+            var window = new CollectionTrustWindow(report) { Owner = this };
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ShowCollectionTrust failed: {ex.Message}");
+        }
     }
 
 
@@ -2918,12 +2971,8 @@ public partial class MainWindow : Window
             extras["preflightErrorCount"] = preflightReport.Errors.Length;
         }
 
-        if (etwStats != null)
-        {
-            long etwDroppedEventTotal = etwStats.TotalDrops.Values.Sum(static value => (long)value);
-            if (etwDroppedEventTotal > 0)
-                extras["etwDroppedEventTotal"] = etwDroppedEventTotal;
-        }
+        // Always emit the total (even 0) so a reader can distinguish "0 drops" from "not recorded".
+        extras["etwDroppedEventTotal"] = etwStats?.TotalDrops.Values.Sum(static value => (long)value) ?? 0L;
 
         return extras;
     }

@@ -47,6 +47,7 @@
         <Menu Grid.Row="0">
             <MenuItem Header="_File">
                 <MenuItem Header="_Open Snapshot..." Click="OpenSnapshotMenuItem_Click" ToolTip="Load timeline from an exported snapshot folder (timeline.json) — Ctrl+O"/>
+                <MenuItem Header="Collection _Trust..." Name="CollectionTrustMenuItem" Click="CollectionTrustMenuItem_Click" Visibility="Collapsed" ToolTip="Show the red/amber/green collection-trust assessment for the open snapshot"/>
                 <MenuItem Header="_Close Snapshot" Name="CloseSnapshotMenuItem" Click="CloseSnapshotMenuItem_Click" Visibility="Collapsed" ToolTip="Return timeline to live data — Ctrl+W"/>
                 <Separator/>
                 <MenuItem Header="_Export Snapshot" Click="ExportButton_Click" ToolTip="Export current index to Snapshot folder — Ctrl+E"/>

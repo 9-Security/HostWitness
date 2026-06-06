@@ -382,8 +382,25 @@ public class OfflineHiveRegistryProvider : IProvider
         };
 
         var summary = $"{queryName}: {keyPathRelative}\\{valueName}";
+        var primaryTimestamp = keyLastWriteUtc;
         OfflineRegistryPersistenceEnrichment.Apply(queryName, keyPathRelative, valueName, valueDataDisplay, valueRaw, fields,
             ref summary);
+
+        // BAM/DAM records per-user last-execution FILETIME under Services\bam|dam\...\UserSettings\<SID>.
+        // These keys are reached by the recursive Services query; decode in place and anchor the event
+        // at the actual execution time so it lands correctly on the timeline.
+        if (BamDamParser.IsBamUserSettingsKey(keyPathRelative, out var bamComponent)
+            && BamDamParser.TryDecodeLastExecution(valueName, valueRaw, out var bamLastExec))
+        {
+            var sid = BamDamParser.ExtractUserSid(keyPathRelative);
+            fields["OfflineHiveDecoded"] = bamComponent;
+            fields["BamComponent"] = bamComponent;
+            fields["BamUserSid"] = sid;
+            fields["BamExecutablePath"] = valueName;
+            fields["BamLastExecutionUtc"] = bamLastExec.ToString("o", CultureInfo.InvariantCulture);
+            primaryTimestamp = bamLastExec;
+            summary = $"{bamComponent} last-exec: {valueName} @ {bamLastExec.ToString("u", CultureInfo.InvariantCulture)} (user {sid})";
+        }
         if (queryName.Equals("UserAssist", StringComparison.OrdinalIgnoreCase)
             && keyPathRelative.EndsWith("\\Count", StringComparison.OrdinalIgnoreCase)
             && valueRaw is byte[] uaBytes
@@ -405,7 +422,7 @@ public class OfflineHiveRegistryProvider : IProvider
         {
             Category = "Registry",
             Action = "Query",
-            Timestamp = keyLastWriteUtc,
+            Timestamp = primaryTimestamp,
             Summary = summary,
             ObjectRegistry = new WinDFIR.Core.Entities.RegistryKey(registryObjectKeyPathFull),
             Evidence = new List<EvidenceRef>
