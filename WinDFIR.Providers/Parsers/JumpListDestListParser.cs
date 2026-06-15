@@ -55,6 +55,11 @@ public static class JumpListDestListParser
             return entries;
 
         var version = BitConverter.ToInt32(bytes, 0);
+        // Known DestList versions are 1 (Win7) and 3/4/6 (Win10/11). Reject implausible versions (e.g. 0 from a
+        // zeroed blob, or a huge value from random/0xFF data) so garbage is not parsed into fabricated entries.
+        if (version < 1 || version > 16)
+            return entries;
+
         var fixedSize = version >= 3 ? FixedV3Plus : FixedV1;
         var trailer = version >= 3 ? 4 : 0;
 
@@ -65,7 +70,9 @@ public static class JumpListDestListParser
             if (!TryParseEntry(bytes, offset, version, fixedSize, trailer, order, out var entry, out var consumed) || consumed <= 0)
                 break;
 
-            entries.Add(entry);
+            // Skip entirely empty entries (no entry id, path, hostname, or timestamp) — padding / garbage tails.
+            if (entry.EntryId != 0 || !string.IsNullOrEmpty(entry.PathHint) || !string.IsNullOrEmpty(entry.Hostname) || entry.LastAccessTimeUtc.HasValue)
+                entries.Add(entry);
             offset += consumed;
             order++;
         }

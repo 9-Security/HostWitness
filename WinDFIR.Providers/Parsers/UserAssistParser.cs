@@ -62,7 +62,9 @@ public static class UserAssistParser
             RunCount = run,
             LastExecutionUtc = last
         };
-        return true;
+        // Require a plausible last-execution FILETIME: without it this is not a trustworthy UserAssist decode
+        // (e.g. zeroed/garbage value data), and reporting it would fabricate evidence.
+        return last != null;
     }
 
     internal static string Rot13(string s)
