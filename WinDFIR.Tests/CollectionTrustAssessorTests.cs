@@ -14,7 +14,7 @@ public class CollectionTrustAssessorTests
         const string manifest = """
         {
           "complete": true,
-          "toolVersion": "1.1.0",
+          "toolVersion": "1.2.0",
           "collectionTime": "2026-06-06T00:00:00Z",
           "registryMode": "offline_only",
           "registryLiveEnabled": false,
