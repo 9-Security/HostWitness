@@ -18,12 +18,15 @@ namespace WinDFIR.Providers.Parsers;
 /// </remarks>
 public sealed class EseDatabaseReader : IDisposable
 {
+    private static readonly System.Threading.SemaphoreSlim EseGate = new(1, 1);
+
     private readonly string _workingCopyPath;
     private readonly bool _ownsWorkingCopy;
     private Instance? _instance;
     private Session? _session;
     private JET_DBID _dbid;
     private bool _attached;
+    private bool _gateHeld;
 
     private EseDatabaseReader(string workingCopyPath, bool ownsWorkingCopy)
     {
@@ -62,6 +65,12 @@ public sealed class EseDatabaseReader : IDisposable
 
     private void AttachAndOpen()
     {
+        // ESE state (page size, temp path) is process-global, so concurrent reader instances collide
+        // (EsentTempPathInUse / sharing violations). Serialize the whole reader lifecycle — ESE reads here are
+        // sequential and not perf-critical. The gate is held until Dispose.
+        EseGate.Wait();
+        _gateHeld = true;
+
         var pageSize = ReadPageSize(_workingCopyPath);
 
         // ESE page size is a PROCESS-GLOBAL parameter that must be set exactly once, BEFORE any instance is
@@ -265,6 +274,11 @@ public sealed class EseDatabaseReader : IDisposable
             if (_ownsWorkingCopy)
             {
                 try { if (File.Exists(_workingCopyPath)) File.Delete(_workingCopyPath); } catch { }
+            }
+            if (_gateHeld)
+            {
+                _gateHeld = false;
+                EseGate.Release();
             }
         }
     }
