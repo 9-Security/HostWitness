@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using WinDFIR.Core.Analysis;
+using WinDFIR.Core.Entities;
 using WinDFIR.Core.Index;
 using WinDFIR.Core.Normalization;
 using WinDFIR.Core.Settings;
@@ -84,11 +85,13 @@ internal static class Program
         // discrepancies into the snapshot as advisory indicators. No-op when a source pair is absent.
         try
         {
-            var anomalies = CrossSourceServiceAnalyzer.Analyze(index);
+            var anomalies = new List<ActivityEvent>();
+            anomalies.AddRange(CrossSourceServiceAnalyzer.Analyze(index));
+            anomalies.AddRange(CrossSourceTaskAnalyzer.Analyze(index));
             foreach (var a in anomalies)
                 index.AddEvent(ActivityEventNormalizer.Normalize(a));
             if (anomalies.Count > 0)
-                Console.WriteLine($"Cross-source anomalies (live vs offline services): {anomalies.Count} (advisory — review).");
+                Console.WriteLine($"Cross-source anomalies (live vs offline): {anomalies.Count} (advisory — review).");
         }
         catch (Exception ex)
         {

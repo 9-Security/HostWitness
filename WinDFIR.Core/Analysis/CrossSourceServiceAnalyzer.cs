@@ -76,7 +76,7 @@ public static class CrossSourceServiceAnalyzer
 
             // The offline hive provider renders value data as hex byte strings (UTF-16 for REG_SZ/EXPAND_SZ,
             // little-endian for DWORD), so decode before use.
-            var imagePath = DecodeUtf16(GetString(evt, "ServiceImagePath"));
+            var imagePath = OfflineValueDecoder.DecodeUtf16(GetString(evt, "ServiceImagePath"));
             if (!string.IsNullOrWhiteSpace(imagePath))
                 acc.ImagePath = imagePath;
 
@@ -86,7 +86,7 @@ public static class CrossSourceServiceAnalyzer
             else if (label.Contains("Process", StringComparison.OrdinalIgnoreCase))
                 acc.ProcessLabel = true;
 
-            var type = DecodeDword(GetString(evt, "ServiceType"));
+            var type = OfflineValueDecoder.DecodeDword(GetString(evt, "ServiceType"));
             if (type.HasValue)
                 acc.ServiceType = type;
 
@@ -111,46 +111,6 @@ public static class CrossSourceServiceAnalyzer
         public bool ProcessLabel;
         public bool DriverLabel;
         public int? ServiceType;
-    }
-
-    /// <summary>Decodes a space-separated hex byte string as UTF-16LE text; returns the input unchanged if it is not hex.</summary>
-    private static string DecodeUtf16(string raw)
-    {
-        var bytes = TryParseHexBytes(raw);
-        if (bytes == null)
-            return raw;
-        var len = bytes.Length - (bytes.Length % 2);
-        return len <= 0 ? string.Empty : System.Text.Encoding.Unicode.GetString(bytes, 0, len).TrimEnd('\0');
-    }
-
-    /// <summary>Decodes a service Type value, accepting a decimal string or a hex-byte (LE DWORD) rendering.</summary>
-    private static int? DecodeDword(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-        if (int.TryParse(raw, out var d))
-            return d;
-        var bytes = TryParseHexBytes(raw);
-        if (bytes != null && bytes.Length >= 4)
-            return BitConverter.ToInt32(bytes, 0);
-        return null;
-    }
-
-    private static byte[]? TryParseHexBytes(string s)
-    {
-        if (string.IsNullOrWhiteSpace(s))
-            return null;
-        var trimmed = s.Replace("...", string.Empty).Trim();
-        var parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
-            return null;
-        var bytes = new byte[parts.Length];
-        for (var i = 0; i < parts.Length; i++)
-        {
-            if (parts[i].Length != 2 || !byte.TryParse(parts[i], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out bytes[i]))
-                return null; // not a hex byte string -> already readable text
-        }
-        return bytes;
     }
 
     /// <summary>

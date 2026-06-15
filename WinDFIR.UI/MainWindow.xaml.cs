@@ -3119,7 +3119,9 @@ public partial class MainWindow : Window
     {
         try
         {
-            var anomalies = CrossSourceServiceAnalyzer.Analyze(_index);
+            var anomalies = new List<ActivityEvent>();
+            anomalies.AddRange(CrossSourceServiceAnalyzer.Analyze(_index));
+            anomalies.AddRange(CrossSourceTaskAnalyzer.Analyze(_index));
             foreach (var a in anomalies)
                 OnEventProduced(this, a);
 
@@ -3129,7 +3131,7 @@ public partial class MainWindow : Window
             if (anomalies.Count == 0)
             {
                 MessageBox.Show(
-                    "No live-vs-offline service discrepancies found (or one of the two sources was not collected — both the live service view and the offline SYSTEM hive must be present to compare).",
+                    "No live-vs-offline discrepancies found (services and scheduled tasks compared). Note: a pair is only compared when both sources were collected — the offline SYSTEM/SOFTWARE hives need Administrator/VSS on a live host.",
                     "Cross-Source Anomalies", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else

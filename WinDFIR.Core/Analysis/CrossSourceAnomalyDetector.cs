@@ -65,7 +65,9 @@ public static class CrossSourceAnomalyDetector
         string category,
         IEnumerable<CrossSourceItem> liveItems,
         IEnumerable<CrossSourceItem> offlineItems,
-        bool compareValues = true)
+        bool compareValues = true,
+        string liveSourceName = "live API",
+        string offlineSourceName = "raw/offline source")
     {
         var live = Index(liveItems);
         var offline = Index(offlineItems);
@@ -85,7 +87,7 @@ public static class CrossSourceAnomalyDetector
                     Key = kv.Key,
                     Display = kv.Value.Display,
                     OfflineValue = kv.Value.Value,
-                    Detail = $"'{kv.Value.Display}' is present in the raw/offline {category.ToLowerInvariant()} source but was NOT reported by the live API. Possible API hiding/tampering — or a disabled/removed entry. Investigate."
+                    Detail = $"'{kv.Value.Display}' is present in the {offlineSourceName} ({category.ToLowerInvariant()}) but NOT in the {liveSourceName}. Possible hiding/tampering — or a disabled/removed entry. Investigate."
                 });
             }
         }
@@ -104,7 +106,7 @@ public static class CrossSourceAnomalyDetector
                     Key = kv.Key,
                     Display = kv.Value.Display,
                     LiveValue = kv.Value.Value,
-                    Detail = $"'{kv.Value.Display}' is reported by the live API but is NOT in the raw/offline {category.ToLowerInvariant()} source. Possible memory-only/injected item — or created after capture. Investigate."
+                    Detail = $"'{kv.Value.Display}' is in the {liveSourceName} but NOT in the {offlineSourceName} ({category.ToLowerInvariant()}). Possible memory-only/injected item — or created after capture. Investigate."
                 });
             }
         }
@@ -127,7 +129,7 @@ public static class CrossSourceAnomalyDetector
                         Display = kv.Value.Display,
                         LiveValue = kv.Value.Value,
                         OfflineValue = off.Value,
-                        Detail = $"'{kv.Value.Display}' differs between live API and raw/offline ({category.ToLowerInvariant()}): live='{kv.Value.Value}' vs offline='{off.Value}'. Possible tampering. Investigate."
+                        Detail = $"'{kv.Value.Display}' differs between {liveSourceName} and {offlineSourceName} ({category.ToLowerInvariant()}): '{kv.Value.Value}' vs '{off.Value}'. Possible tampering. Investigate."
                     });
                 }
             }

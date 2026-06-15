@@ -413,8 +413,11 @@ public class OfflineHiveRegistryProvider : IProvider
             if (valueName.Equals("Path", StringComparison.OrdinalIgnoreCase))
             {
                 fields["OfflineHiveDecoded"] = "TaskCache";
-                fields["TaskCache_Path"] = valueDataDisplay;
-                summary = $"TaskCache task: {valueDataDisplay} ({taskGuid})";
+                // Decode the full task path from the raw bytes — valueDataDisplay is hex and truncated to 200
+                // chars, which would cut off long \Microsoft\Windows\... paths and break correlation.
+                var taskPath = DecodeRegSz(valueRaw, valueDataDisplay);
+                fields["TaskCache_Path"] = taskPath;
+                summary = $"TaskCache task: {taskPath} ({taskGuid})";
             }
             else if (valueName.Equals("DynamicInfo", StringComparison.OrdinalIgnoreCase)
                 && TaskCacheParser.TryDecodeDynamicInfo(valueRaw, out var tcCreated, out var tcLastRun, out var tcLastSuccess))
@@ -513,6 +516,22 @@ public class OfflineHiveRegistryProvider : IProvider
         }
 
         return events;
+    }
+
+    /// <summary>Decodes a REG_SZ/REG_EXPAND_SZ value from its raw UTF-16LE bytes (full, untruncated). Falls back to the display string.</summary>
+    private static string DecodeRegSz(byte[]? raw, string fallback)
+    {
+        if (raw == null || raw.Length < 2)
+            return fallback;
+        try
+        {
+            var len = raw.Length - (raw.Length % 2);
+            return System.Text.Encoding.Unicode.GetString(raw, 0, len).TrimEnd('\0');
+        }
+        catch
+        {
+            return fallback;
+        }
     }
 
     private static string ExtractControlSetFromKeyPath(string relativeKeyPath)
