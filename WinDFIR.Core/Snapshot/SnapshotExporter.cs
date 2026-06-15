@@ -516,6 +516,7 @@ public class SnapshotExporter : ISnapshotExporter
             case "PowerShellHistory":
             case "StartupFolder":
             case "EvtxFile":
+            case "SrumDb":
                 artifactSourcePath = evidence.Reference;
                 return Path.IsPathRooted(artifactSourcePath);
             case "BrowserHistory":
@@ -538,6 +539,7 @@ public class SnapshotExporter : ISnapshotExporter
             "PowerShellHistory" => "powershell",
             "StartupFolder" => "startup",
             "EvtxFile" => "evtx",
+            "SrumDb" => "srum",
             _ => "other"
         };
     }
@@ -558,6 +560,7 @@ public class SnapshotExporter : ISnapshotExporter
             "PowerShellHistory" => fileName.Equals("ConsoleHost_history.txt", StringComparison.OrdinalIgnoreCase),
             "StartupFolder" => IsAllowedStartupFile(path),
             "EvtxFile" => fileName.EndsWith(".evtx", StringComparison.OrdinalIgnoreCase),
+            "SrumDb" => fileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase),
             _ => false
         };
     }

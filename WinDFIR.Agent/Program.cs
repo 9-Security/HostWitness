@@ -24,7 +24,7 @@ internal static class Program
     {
         try
         {
-        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles) = ParseArgs(args);
+        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
         {
@@ -40,7 +40,7 @@ internal static class Program
         var index = new InMemoryActivityIndex(maxEvents == 0 ? 0 : maxEvents);
         var exporter = new SnapshotExporter { UseVssSnapshots = true };
 
-        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles);
+        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles, srumFiles);
 
         using var cts = new CancellationTokenSource();
         foreach (var p in providers)
@@ -116,13 +116,14 @@ internal static class Program
         }
     }
 
-    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles) ParseArgs(string[] args)
+    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles) ParseArgs(string[] args)
     {
         string? outputDir = null;
         var collectSeconds = DefaultCollectSeconds;
         var enableEtw = false;
         HashSet<string>? providerFilter = null;
         var evtxFiles = new List<string>();
+        var srumFiles = new List<string>();
 
         var positional = new List<string>();
         foreach (var a in args)
@@ -146,6 +147,12 @@ internal static class Program
                 evtxFiles.AddRange(list);
                 continue;
             }
+            if (arg.StartsWith("--srum=", StringComparison.OrdinalIgnoreCase))
+            {
+                var list = arg.Substring("--srum=".Length).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                srumFiles.AddRange(list);
+                continue;
+            }
             positional.Add(arg);
         }
 
@@ -154,7 +161,7 @@ internal static class Program
         if (positional.Count > 1 && int.TryParse(positional[1], out var sec) && sec > 0)
             collectSeconds = sec;
 
-        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles);
+        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles);
     }
 
     private static bool IncludeProvider(string key, HashSet<string>? filter)
@@ -163,10 +170,11 @@ internal static class Program
         return filter.Contains(key);
     }
 
-    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null)
+    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null, List<string>? srumFiles = null)
     {
         var providers = new List<IProvider>();
         var hasOfflineEvtx = evtxFiles != null && evtxFiles.Count > 0;
+        var hasSrum = srumFiles != null && srumFiles.Count > 0;
 
         if (IncludeProvider("Process", providerFilter))
             providers.Add(new LiveProcessProvider());
@@ -195,6 +203,14 @@ internal static class Program
             providers.Add(new PowerShellHistoryProvider());
         if (IncludeProvider("StartupFolder", providerFilter))
             providers.Add(new StartupFolderProvider());
+        // SRUM is opt-in (high-volume historical data); --srum supplies the database path(s).
+        if (hasSrum)
+        {
+            var srumProvider = new SrumProvider();
+            foreach (var file in srumFiles!)
+                srumProvider.AddDatabase(file);
+            providers.Add(srumProvider);
+        }
 
         var allowLiveRegistry = RegistryLivePolicy.IsLiveRegistryEnabled(settings);
         if (!allowLiveRegistry && IncludeProvider("Registry", providerFilter))

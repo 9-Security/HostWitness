@@ -2929,6 +2929,67 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void LoadSrumMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
+
+        try
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Load SRUM database (SRUDB.dat)",
+                Filter = "SRUM database (SRUDB.dat)|SRUDB.dat|ESE database (*.dat)|*.dat|All files (*.*)|*.*",
+                FileName = "SRUDB.dat",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true)
+                return;
+
+            Mouse.OverrideCursor = Cursors.Wait;
+
+            var added = 0;
+            var provider = new SrumProvider();
+            provider.AddDatabase(dialog.FileName);
+
+            void CountingHandler(object? s, ActivityEvent ev) => Interlocked.Increment(ref added);
+
+            provider.EventProduced += OnEventProduced;
+            provider.EventProduced += CountingHandler;
+            try
+            {
+                await provider.RunToCompletionAsync();
+            }
+            finally
+            {
+                provider.EventProduced -= OnEventProduced;
+                provider.EventProduced -= CountingHandler;
+            }
+
+            UpdateSharedContent();
+            TimelineViewControl?.Refresh();
+
+            Mouse.OverrideCursor = null;
+
+            MessageBox.Show(
+                $"Parsed SRUM database; added {added} event(s) to the current session (per-app network/resource usage, tagged Mode=Offline).\n\nSRUM is high-volume — if the index cap is reached, see the status-bar truncation warning.",
+                "Load SRUM", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Mouse.OverrideCursor = null;
+            LogToAppLog("Load SRUM failed", ex);
+            MessageBox.Show($"Load failed: {ex.Message}", "Load SRUM", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
+        }
+    }
+
     private void CloseSnapshotMenuItem_Click(object sender, RoutedEventArgs e)
 
     {
