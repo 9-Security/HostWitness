@@ -47,7 +47,7 @@ public class SnapshotExporter : ISnapshotExporter
 
     public bool UseVssSnapshots { get; set; } = true;
 
-    public async Task ExportAsync(IActivityIndex index, string outputDirectory, SnapshotExportOptions? options = null, CancellationToken cancellationToken = default)
+    public async Task<string> ExportAsync(IActivityIndex index, string outputDirectory, SnapshotExportOptions? options = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -106,6 +106,8 @@ public class SnapshotExporter : ISnapshotExporter
             TryDeleteDirectory(workingDir);
             throw;
         }
+
+        return snapshotDir;
     }
 
     private static void TryDeleteDirectory(string directory)
@@ -315,10 +317,14 @@ public class SnapshotExporter : ISnapshotExporter
         var hostname = Environment.MachineName;
         var machineSid = GetMachineSid();
         var toolVersion = ResolveToolVersion(manifestExtras);
+        var collectionId = ResolveCollectionId(manifestExtras);
 
         var manifest = new Dictionary<string, object?>
         {
             ["toolVersion"] = toolVersion,
+            // Stable, unique identifier for this collection. Unlike the timestamped folder name it survives
+            // copy/rename, so a central case repository can key bundles by it (idempotent re-publish).
+            ["collectionId"] = collectionId,
             ["collectionTime"] = DateTime.UtcNow.ToString("O"),
             ["host"] = new Dictionary<string, object?>
             {
@@ -354,6 +360,20 @@ public class SnapshotExporter : ISnapshotExporter
         }
 
         return ToolVersionProvider.GetCurrentVersion(typeof(SnapshotExporter));
+    }
+
+    private static string ResolveCollectionId(IReadOnlyDictionary<string, object?>? manifestExtras)
+    {
+        // Allow callers (and tests) to supply a deterministic id; otherwise mint a fresh one per collection.
+        if (manifestExtras != null
+            && manifestExtras.TryGetValue("collectionId", out var value)
+            && value is string id
+            && !string.IsNullOrWhiteSpace(id))
+        {
+            return id;
+        }
+
+        return Guid.NewGuid().ToString("D");
     }
 
     private Task<ArtifactExportResult> ExportRawArtifactsAsync(

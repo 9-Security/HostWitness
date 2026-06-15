@@ -8,6 +8,7 @@ using WinDFIR.Core.Analysis;
 using WinDFIR.Core.Entities;
 using WinDFIR.Core.Index;
 using WinDFIR.Core.Normalization;
+using WinDFIR.Core.Repository;
 using WinDFIR.Core.Settings;
 using WinDFIR.Core.Snapshot;
 using WinDFIR.Providers;
@@ -17,6 +18,10 @@ namespace WinDFIR.Agent;
 /// <summary>
 /// Headless agent: runs the same collectors as the UI app and exports a snapshot to disk.
 /// For remote deployment: copy HostWitness.Agent.exe to target, run with output path, copy back the snapshot folder.
+/// Optionally pass --repo=&lt;path&gt; (a shared folder / mounted bucket) to publish the finished bundle into a
+/// central case repository so collections from many investigated hosts gather in one place.
+///
+/// Exit codes: 0 = success, 1 = export/general failure, 2 = provider stop failure, 3 = repository publish failure.
 /// </summary>
 internal static class Program
 {
@@ -26,7 +31,7 @@ internal static class Program
     {
         try
         {
-        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles) = ParseArgs(args);
+        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles, repoPath) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
         {
@@ -100,6 +105,7 @@ internal static class Program
         }
 
         Console.WriteLine($"Exporting snapshot to {outputDir} (events: {index.EventCount})...");
+        string bundlePath;
         try
         {
             var manifestExtras = CollectionMetadataBuilder.BuildBaseManifestExtras(
@@ -115,7 +121,7 @@ internal static class Program
                 ManifestExtras = manifestExtras,
                 SourceEventCount = index.EventCount
             };
-            await exporter.ExportAsync(index, outputDir, exportOptions);
+            bundlePath = await exporter.ExportAsync(index, outputDir, exportOptions);
         }
         catch (Exception ex)
         {
@@ -123,7 +129,41 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("Done. Snapshot folder: " + Path.GetFullPath(outputDir));
+        Console.WriteLine("Done. Snapshot folder: " + bundlePath);
+
+        // Optional: publish the finished, hash-verified bundle into a central case repository so an analyst
+        // can gather collections from many investigated hosts in one shared location. Export already
+        // succeeded above, so a publish failure is reported distinctly (exit 3) — the local bundle is intact.
+        if (!string.IsNullOrEmpty(repoPath))
+        {
+            try
+            {
+                var sink = new FileSystemArtifactSink(repoPath);
+                Console.WriteLine($"Publishing bundle to {sink.Describe()}...");
+                var result = await sink.PublishBundleAsync(bundlePath);
+                switch (result.Status)
+                {
+                    case BundlePublishStatus.Published:
+                        Console.WriteLine($"Published to {result.DestinationPath} " +
+                            $"({result.FilesCopied} copied, {result.FilesSkipped} already present, {result.BytesCopied} bytes).");
+                        break;
+                    case BundlePublishStatus.AlreadyPresent:
+                        Console.WriteLine($"Already present in repository (collectionId {result.CollectionId}); nothing to do.");
+                        break;
+                    default:
+                        Console.Error.WriteLine("Publish failed:");
+                        foreach (var issue in result.Issues)
+                            Console.Error.WriteLine($"  - {issue}");
+                        return 3;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Publish failed: {ex.Message}");
+                return 3;
+            }
+        }
+
         return 0;
         }
         catch (Exception ex)
@@ -136,7 +176,7 @@ internal static class Program
         }
     }
 
-    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles, List<string> wmiFiles) ParseArgs(string[] args)
+    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles, List<string> wmiFiles, string? repoPath) ParseArgs(string[] args)
     {
         string? outputDir = null;
         var collectSeconds = DefaultCollectSeconds;
@@ -146,6 +186,7 @@ internal static class Program
         var srumFiles = new List<string>();
         var bitsFiles = new List<string>();
         var wmiFiles = new List<string>();
+        string? repoPath = null;
 
         var positional = new List<string>();
         foreach (var a in args)
@@ -187,6 +228,13 @@ internal static class Program
                 wmiFiles.AddRange(list);
                 continue;
             }
+            if (arg.StartsWith("--repo=", StringComparison.OrdinalIgnoreCase))
+            {
+                var value = arg.Substring("--repo=".Length).Trim().Trim('"');
+                if (!string.IsNullOrEmpty(value))
+                    repoPath = value;
+                continue;
+            }
             positional.Add(arg);
         }
 
@@ -195,7 +243,7 @@ internal static class Program
         if (positional.Count > 1 && int.TryParse(positional[1], out var sec) && sec > 0)
             collectSeconds = sec;
 
-        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles);
+        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles, repoPath);
     }
 
     private static bool IncludeProvider(string key, HashSet<string>? filter)

@@ -13,5 +13,6 @@ public interface ISnapshotExporter
     /// Exports a snapshot bundle to the specified directory.
     /// </summary>
     /// <param name="options">Optional: manifest extras (e.g. known risks, ETW drop counts).</param>
-    Task ExportAsync(IActivityIndex index, string outputDirectory, SnapshotExportOptions? options = null, CancellationToken cancellationToken = default);
+    /// <returns>The full path of the finalized snapshot bundle directory (e.g. ...\snapshot_yyyyMMdd_HHmmss).</returns>
+    Task<string> ExportAsync(IActivityIndex index, string outputDirectory, SnapshotExportOptions? options = null, CancellationToken cancellationToken = default);
 }
