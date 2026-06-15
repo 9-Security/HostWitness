@@ -60,7 +60,7 @@ if "%STABLE_GATE%"=="1" goto :run_gate
 
 :call_restore_build_test
 echo [publish.cmd] build/test chain via repo-local APPDATA ...
-set "BUILD_CHAIN=set APPDATA=%NUGET_APPDATA% & mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & del /q WinDFIR.UI\obj\*.tmp 2>nul & del /q WinDFIR.Tests\obj\*.tmp 2>nul & dotnet restore WinDFIR.sln -v minimal --disable-parallel && dotnet build WinDFIR.sln -c Release --no-restore -v minimal"
+set "BUILD_CHAIN=set APPDATA=%NUGET_APPDATA%& mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & del /q WinDFIR.UI\obj\*.tmp 2>nul & del /q WinDFIR.Tests\obj\*.tmp 2>nul & dotnet restore WinDFIR.sln -v minimal --disable-parallel && dotnet build WinDFIR.sln -c Release --no-restore -v minimal"
 if not "%SKIP_TESTS%"=="1" set "BUILD_CHAIN=%BUILD_CHAIN% && dotnet test WinDFIR.sln -c Release --no-restore"
 cmd.exe /d /c "%BUILD_CHAIN%"
 if errorlevel 1 (
@@ -92,7 +92,7 @@ echo [publish.cmd] Gate OK; publishing...
 set "PUBLISH_ARGS=-c Release -o Release -r %RUNTIME% -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=none --no-restore"
 if not "%FW_DEP%"=="1" set "PUBLISH_ARGS=%PUBLISH_ARGS% --self-contained true"
 echo [publish.cmd] publish chain via repo-local APPDATA ...
-set "PUBLISH_CHAIN=set APPDATA=%NUGET_APPDATA% & mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & rd /s /q Release 2>nul & mkdir Release & del /q WinDFIR.UI\obj\*.tmp 2>nul & dotnet restore WinDFIR.UI\WinDFIR.UI.csproj -r %RUNTIME% -v minimal --disable-parallel && dotnet publish WinDFIR.UI\WinDFIR.UI.csproj %PUBLISH_ARGS% && if exist Release\HostWitness.exe (exit /b 0) else (exit /b 3)"
+set "PUBLISH_CHAIN=set APPDATA=%NUGET_APPDATA%& mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & rd /s /q Release 2>nul & mkdir Release & del /q WinDFIR.UI\obj\*.tmp 2>nul & dotnet restore WinDFIR.UI\WinDFIR.UI.csproj -r %RUNTIME% -v minimal --disable-parallel && dotnet publish WinDFIR.UI\WinDFIR.UI.csproj %PUBLISH_ARGS% && if exist Release\HostWitness.exe (exit /b 0) else (exit /b 3)"
 cmd.exe /d /c "%PUBLISH_CHAIN%"
 set "PE=!ERRORLEVEL!"
 if not "!PE!"=="0" (
