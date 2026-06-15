@@ -88,6 +88,7 @@ internal static class Program
             var anomalies = new List<ActivityEvent>();
             anomalies.AddRange(CrossSourceServiceAnalyzer.Analyze(index));
             anomalies.AddRange(CrossSourceTaskAnalyzer.Analyze(index));
+            anomalies.AddRange(CrossSourceRunKeyAnalyzer.Analyze(index));
             foreach (var a in anomalies)
                 index.AddEvent(ActivityEventNormalizer.Normalize(a));
             if (anomalies.Count > 0)
@@ -215,6 +216,8 @@ internal static class Program
             providers.Add(new LiveProcessProvider());
         if (IncludeProvider("Service", providerFilter))
             providers.Add(new LiveServiceProvider());
+        if (IncludeProvider("ProcessCrossCheck", providerFilter))
+            providers.Add(new ProcessApiCrossCheckProvider());
         if (IncludeProvider("Net", providerFilter))
             providers.Add(new NetConnectionProvider());
         // --evtx implies EventLog: offline .evtx parsing supersedes live-channel reading.

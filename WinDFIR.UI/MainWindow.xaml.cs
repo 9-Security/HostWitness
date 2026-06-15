@@ -177,6 +177,8 @@ public partial class MainWindow : Window
 
             new LiveServiceProvider(),
 
+            new ProcessApiCrossCheckProvider(),
+
             new NetConnectionProvider(),
 
             new ETWMonitorProvider(),
@@ -3122,6 +3124,7 @@ public partial class MainWindow : Window
             var anomalies = new List<ActivityEvent>();
             anomalies.AddRange(CrossSourceServiceAnalyzer.Analyze(_index));
             anomalies.AddRange(CrossSourceTaskAnalyzer.Analyze(_index));
+            anomalies.AddRange(CrossSourceRunKeyAnalyzer.Analyze(_index));
             foreach (var a in anomalies)
                 OnEventProduced(this, a);
 
