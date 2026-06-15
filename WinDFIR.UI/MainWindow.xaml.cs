@@ -32,6 +32,7 @@ using WinDFIR.Core;
 
 using WinDFIR.Core.Entities;
 
+using WinDFIR.Core.Analysis;
 using WinDFIR.Core.Index;
 
 using WinDFIR.Core.Normalization;
@@ -173,6 +174,8 @@ public partial class MainWindow : Window
 #endif
 
             new LiveProcessProvider(),
+
+            new LiveServiceProvider(),
 
             new NetConnectionProvider(),
 
@@ -3109,6 +3112,37 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = null;
             _isLongOpRunning = false;
+        }
+    }
+
+    private void CrossSourceAnomaliesMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var anomalies = CrossSourceServiceAnalyzer.Analyze(_index);
+            foreach (var a in anomalies)
+                OnEventProduced(this, a);
+
+            UpdateSharedContent();
+            TimelineViewControl?.Refresh();
+
+            if (anomalies.Count == 0)
+            {
+                MessageBox.Show(
+                    "No live-vs-offline service discrepancies found (or one of the two sources was not collected — both the live service view and the offline SYSTEM hive must be present to compare).",
+                    "Cross-Source Anomalies", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"{anomalies.Count} cross-source anomaly(ies) added to the timeline (Category=Anomaly).\n\nThese are advisory tripwires — a service present in the raw hive but missing from the live API can indicate hiding/tampering, but benign causes exist (disabled/removed services). Review each.",
+                    "Cross-Source Anomalies", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToAppLog("Cross-source anomaly analysis failed", ex);
+            MessageBox.Show($"Analysis failed: {ex.Message}", "Cross-Source Anomalies", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

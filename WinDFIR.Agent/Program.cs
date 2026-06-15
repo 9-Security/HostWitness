@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using WinDFIR.Core.Analysis;
 using WinDFIR.Core.Index;
 using WinDFIR.Core.Normalization;
 using WinDFIR.Core.Settings;
@@ -77,6 +78,21 @@ internal static class Program
                 Console.Error.WriteLine($"Provider stop failed: {ex.Message}");
             Console.Error.WriteLine("Export skipped because one or more providers failed to stop cleanly.");
             return 2;
+        }
+
+        // Cross-source anomaly check (P6): compare the live API view against the raw/offline view and fold any
+        // discrepancies into the snapshot as advisory indicators. No-op when a source pair is absent.
+        try
+        {
+            var anomalies = CrossSourceServiceAnalyzer.Analyze(index);
+            foreach (var a in anomalies)
+                index.AddEvent(ActivityEventNormalizer.Normalize(a));
+            if (anomalies.Count > 0)
+                Console.WriteLine($"Cross-source anomalies (live vs offline services): {anomalies.Count} (advisory — review).");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Cross-source analysis skipped: {ex.Message}");
         }
 
         Console.WriteLine($"Exporting snapshot to {outputDir} (events: {index.EventCount})...");
@@ -194,6 +210,8 @@ internal static class Program
 
         if (IncludeProvider("Process", providerFilter))
             providers.Add(new LiveProcessProvider());
+        if (IncludeProvider("Service", providerFilter))
+            providers.Add(new LiveServiceProvider());
         if (IncludeProvider("Net", providerFilter))
             providers.Add(new NetConnectionProvider());
         // --evtx implies EventLog: offline .evtx parsing supersedes live-channel reading.

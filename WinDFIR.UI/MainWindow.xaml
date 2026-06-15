@@ -67,6 +67,7 @@
             <MenuItem Header="_Advanced">
                 <MenuItem Header="_Drill Down" Click="DrillDownButton_Click" Name="DrillDownMenuItem" ToolTip="From Live Process: show related events in Timeline — Ctrl+Shift+D"/>
                 <MenuItem Name="RegistrySearchMenuItem" Header="Registry _Search..." Click="RegistrySearchMenuItem_Click" ToolTip="Re-run default registry queries or run a custom query (Value/Data pattern, Recursive). Results go to Timeline."/>
+                <MenuItem Header="Cross-Source _Anomalies..." Click="CrossSourceAnomaliesMenuItem_Click" ToolTip="Compare the live API view (WMI services) against the raw/offline SYSTEM-hive view; flags items hidden from the live API (rootkit/tampering tripwire). Advisory — review."/>
                 <Separator/>
                 <MenuItem Header="_Settings..." Click="SettingsMenuItem_Click"/>
             </MenuItem>
