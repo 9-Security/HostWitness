@@ -24,7 +24,7 @@ internal static class Program
     {
         try
         {
-        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles) = ParseArgs(args);
+        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
         {
@@ -40,7 +40,7 @@ internal static class Program
         var index = new InMemoryActivityIndex(maxEvents == 0 ? 0 : maxEvents);
         var exporter = new SnapshotExporter { UseVssSnapshots = true };
 
-        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles, srumFiles);
+        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles);
 
         using var cts = new CancellationTokenSource();
         foreach (var p in providers)
@@ -116,7 +116,7 @@ internal static class Program
         }
     }
 
-    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles) ParseArgs(string[] args)
+    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles) ParseArgs(string[] args)
     {
         string? outputDir = null;
         var collectSeconds = DefaultCollectSeconds;
@@ -124,6 +124,7 @@ internal static class Program
         HashSet<string>? providerFilter = null;
         var evtxFiles = new List<string>();
         var srumFiles = new List<string>();
+        var bitsFiles = new List<string>();
 
         var positional = new List<string>();
         foreach (var a in args)
@@ -153,6 +154,12 @@ internal static class Program
                 srumFiles.AddRange(list);
                 continue;
             }
+            if (arg.StartsWith("--bits=", StringComparison.OrdinalIgnoreCase))
+            {
+                var list = arg.Substring("--bits=".Length).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                bitsFiles.AddRange(list);
+                continue;
+            }
             positional.Add(arg);
         }
 
@@ -161,7 +168,7 @@ internal static class Program
         if (positional.Count > 1 && int.TryParse(positional[1], out var sec) && sec > 0)
             collectSeconds = sec;
 
-        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles);
+        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles);
     }
 
     private static bool IncludeProvider(string key, HashSet<string>? filter)
@@ -170,11 +177,12 @@ internal static class Program
         return filter.Contains(key);
     }
 
-    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null, List<string>? srumFiles = null)
+    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null, List<string>? srumFiles = null, List<string>? bitsFiles = null)
     {
         var providers = new List<IProvider>();
         var hasOfflineEvtx = evtxFiles != null && evtxFiles.Count > 0;
         var hasSrum = srumFiles != null && srumFiles.Count > 0;
+        var hasBits = bitsFiles != null && bitsFiles.Count > 0;
 
         if (IncludeProvider("Process", providerFilter))
             providers.Add(new LiveProcessProvider());
@@ -210,6 +218,14 @@ internal static class Program
             foreach (var file in srumFiles!)
                 srumProvider.AddDatabase(file);
             providers.Add(srumProvider);
+        }
+        // BITS is opt-in; --bits supplies the qmgr.db path(s).
+        if (hasBits)
+        {
+            var bitsProvider = new BitsProvider();
+            foreach (var file in bitsFiles!)
+                bitsProvider.AddDatabase(file);
+            providers.Add(bitsProvider);
         }
 
         var allowLiveRegistry = RegistryLivePolicy.IsLiveRegistryEnabled(settings);

@@ -64,14 +64,17 @@ public sealed class EseDatabaseReader : IDisposable
     {
         var pageSize = ReadPageSize(_workingCopyPath);
 
+        // ESE page size is a PROCESS-GLOBAL parameter that must be set exactly once, BEFORE any instance is
+        // created, and must match the database being attached. Different databases can use different page
+        // sizes (e.g. SRUDB.dat=4096, qmgr.db=16384), so once a process has opened one, it cannot open another
+        // with a different size. Set it once and surface a clear, catchable error on conflict.
+        ApplyGlobalPageSize(pageSize);
+
         _instance = new Instance("HostWitness_ESE_" + Guid.NewGuid().ToString("N"));
         // Recovery OFF + no logging: read a dirty/standalone DB without its transaction logs, read-only.
         _instance.Parameters.Recovery = false;
         _instance.Parameters.CircularLog = true;
         _instance.Parameters.NoInformationEvent = true;
-        // Page size is a global parameter and must match the database header before init.
-        if (pageSize > 0)
-            SystemParameters.DatabasePageSize = pageSize;
         _instance.Init();
 
         _session = new Session(_instance);
@@ -179,6 +182,40 @@ public sealed class EseDatabaseReader : IDisposable
                 return Api.RetrieveColumnAsGuid(sesid, tableId, id);
             default:
                 return Api.RetrieveColumn(sesid, tableId, id); // raw bytes fallback
+        }
+    }
+
+    private static readonly object GlobalPageSizeLock = new();
+    private static int _processPageSize; // 0 = not yet set this process
+
+    /// <summary>
+    /// Thrown when a process tries to open an ESE database whose page size differs from one already opened
+    /// this process (the page size is a per-process global the engine cannot change after first use).
+    /// </summary>
+    public sealed class EsePageSizeConflictException : InvalidOperationException
+    {
+        public EsePageSizeConflictException(string message) : base(message) { }
+    }
+
+    private static void ApplyGlobalPageSize(int pageSize)
+    {
+        if (pageSize <= 0)
+            return;
+
+        lock (GlobalPageSizeLock)
+        {
+            if (_processPageSize == 0)
+            {
+                SystemParameters.DatabasePageSize = pageSize;
+                _processPageSize = pageSize;
+            }
+            else if (_processPageSize != pageSize)
+            {
+                throw new EsePageSizeConflictException(
+                    $"This session already opened an ESE database with page size {_processPageSize}; cannot open " +
+                    $"one with page size {pageSize} (the ESE page size is a per-process global). Restart the " +
+                    "application and open this database first.");
+            }
         }
     }
 

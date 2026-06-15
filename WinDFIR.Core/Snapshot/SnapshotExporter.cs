@@ -517,6 +517,7 @@ public class SnapshotExporter : ISnapshotExporter
             case "StartupFolder":
             case "EvtxFile":
             case "SrumDb":
+            case "BitsDb":
                 artifactSourcePath = evidence.Reference;
                 return Path.IsPathRooted(artifactSourcePath);
             case "BrowserHistory":
@@ -540,6 +541,7 @@ public class SnapshotExporter : ISnapshotExporter
             "StartupFolder" => "startup",
             "EvtxFile" => "evtx",
             "SrumDb" => "srum",
+            "BitsDb" => "bits",
             _ => "other"
         };
     }
@@ -561,6 +563,7 @@ public class SnapshotExporter : ISnapshotExporter
             "StartupFolder" => IsAllowedStartupFile(path),
             "EvtxFile" => fileName.EndsWith(".evtx", StringComparison.OrdinalIgnoreCase),
             "SrumDb" => fileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase),
+            "BitsDb" => fileName.EndsWith(".db", StringComparison.OrdinalIgnoreCase) || fileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase),
             _ => false
         };
     }

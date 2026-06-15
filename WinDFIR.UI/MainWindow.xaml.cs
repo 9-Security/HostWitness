@@ -2990,6 +2990,67 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void LoadBitsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
+
+        try
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Load BITS database (qmgr.db)",
+                Filter = "BITS database (qmgr.db)|qmgr.db|ESE database (*.db;*.dat)|*.db;*.dat|All files (*.*)|*.*",
+                FileName = "qmgr.db",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true)
+                return;
+
+            Mouse.OverrideCursor = Cursors.Wait;
+
+            var added = 0;
+            var provider = new BitsProvider();
+            provider.AddDatabase(dialog.FileName);
+
+            void CountingHandler(object? s, ActivityEvent ev) => Interlocked.Increment(ref added);
+
+            provider.EventProduced += OnEventProduced;
+            provider.EventProduced += CountingHandler;
+            try
+            {
+                await provider.RunToCompletionAsync();
+            }
+            finally
+            {
+                provider.EventProduced -= OnEventProduced;
+                provider.EventProduced -= CountingHandler;
+            }
+
+            UpdateSharedContent();
+            TimelineViewControl?.Refresh();
+
+            Mouse.OverrideCursor = null;
+
+            MessageBox.Show(
+                $"Parsed BITS database; added {added} record(s) to the current session (download URLs/paths recovered, tagged Mode=Offline).",
+                "Load BITS", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Mouse.OverrideCursor = null;
+            LogToAppLog("Load BITS failed", ex);
+            MessageBox.Show($"Load failed: {ex.Message}", "Load BITS", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
+        }
+    }
+
     private void CloseSnapshotMenuItem_Click(object sender, RoutedEventArgs e)
 
     {

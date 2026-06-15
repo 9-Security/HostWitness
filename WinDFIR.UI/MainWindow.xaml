@@ -55,6 +55,7 @@
                 <MenuItem Header="_Open from SQLite..." Click="OpenFromSqliteMenuItem_Click" ToolTip="Load timeline from a SQLite database (created by Export to SQLite)"/>
                 <MenuItem Header="Load Event Log (._evtx)..." Click="LoadEvtxMenuItem_Click" ToolTip="Parse one or more offline .evtx files (from a dead box, VSS copy, or another tool) into the current session"/>
                 <MenuItem Header="Load _SRUM (SRUDB.dat)..." Click="LoadSrumMenuItem_Click" ToolTip="Parse a System Resource Usage Monitor database (SRUDB.dat) — per-app network and resource usage history. High-volume data."/>
+                <MenuItem Header="Load _BITS (qmgr.db)..." Click="LoadBitsMenuItem_Click" ToolTip="Parse a BITS queue database (qmgr.db) — recovers download URLs and local paths from queued transfer jobs."/>
                 <Separator/>
                 <MenuItem Header="Save _session now" Click="SaveSessionMenuItem_Click" ToolTip="Save current timeline to last session (restore on next start)"/>
                 <MenuItem Header="Save _layout now" Click="SaveLayoutMenuItem_Click" ToolTip="Save window position, size, and tab selection"/>
