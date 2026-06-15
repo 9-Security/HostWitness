@@ -212,6 +212,7 @@ public class OfflineHiveRegistryProvider : IProvider
             queries.Add(new OfflineRegistryQuery("BitsClient", @"Microsoft\Windows\CurrentVersion\BITS", true));
             queries.Add(new OfflineRegistryQuery("WmiCimom", @"Microsoft\WBEM\CIMOM", false));
             queries.Add(new OfflineRegistryQuery("SrumRegistry", @"Microsoft\Windows NT\CurrentVersion\SRUM", true));
+            queries.Add(new OfflineRegistryQuery("TaskCache", @"Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks", true));
         }
         else if (hiveName.Equals("NTUSER.DAT", StringComparison.OrdinalIgnoreCase))
         {
@@ -400,6 +401,36 @@ public class OfflineHiveRegistryProvider : IProvider
             fields["BamLastExecutionUtc"] = bamLastExec.ToString("o", CultureInfo.InvariantCulture);
             primaryTimestamp = bamLastExec;
             summary = $"{bamComponent} last-exec: {valueName} @ {bamLastExec.ToString("u", CultureInfo.InvariantCulture)} (user {sid})";
+        }
+
+        // TaskCache records Scheduled Task registration metadata under ...\Schedule\TaskCache\Tasks\{GUID}.
+        // The recursive TaskCache query reaches each per-task key; decode the safe fields in place — the Path
+        // string and the FILETIMEs in DynamicInfo. Anchor the DynamicInfo event at last-run (else creation)
+        // so it lands on the timeline at execution time, mirroring BAM/DAM.
+        if (TaskCacheParser.IsTaskCacheTaskKey(keyPathRelative, out var taskGuid))
+        {
+            fields["TaskCache_Guid"] = taskGuid;
+            if (valueName.Equals("Path", StringComparison.OrdinalIgnoreCase))
+            {
+                fields["OfflineHiveDecoded"] = "TaskCache";
+                fields["TaskCache_Path"] = valueDataDisplay;
+                summary = $"TaskCache task: {valueDataDisplay} ({taskGuid})";
+            }
+            else if (valueName.Equals("DynamicInfo", StringComparison.OrdinalIgnoreCase)
+                && TaskCacheParser.TryDecodeDynamicInfo(valueRaw, out var tcCreated, out var tcLastRun, out var tcLastSuccess))
+            {
+                fields["OfflineHiveDecoded"] = "TaskCache";
+                if (tcCreated.HasValue)
+                    fields["TaskCache_CreatedUtc"] = tcCreated.Value.ToString("o", CultureInfo.InvariantCulture);
+                if (tcLastRun.HasValue)
+                    fields["TaskCache_LastRunUtc"] = tcLastRun.Value.ToString("o", CultureInfo.InvariantCulture);
+                if (tcLastSuccess.HasValue)
+                    fields["TaskCache_LastSuccessUtc"] = tcLastSuccess.Value.ToString("o", CultureInfo.InvariantCulture);
+                primaryTimestamp = tcLastRun ?? tcCreated ?? keyLastWriteUtc;
+                var crTxt = tcCreated?.ToString("u", CultureInfo.InvariantCulture) ?? "n/a";
+                var lrTxt = tcLastRun?.ToString("u", CultureInfo.InvariantCulture) ?? "n/a";
+                summary = $"TaskCache DynamicInfo ({taskGuid}): created={crTxt}, lastRun={lrTxt}";
+            }
         }
         if (queryName.Equals("UserAssist", StringComparison.OrdinalIgnoreCase)
             && keyPathRelative.EndsWith("\\Count", StringComparison.OrdinalIgnoreCase)
