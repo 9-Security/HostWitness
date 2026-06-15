@@ -4040,6 +4040,17 @@ public partial class MainWindow : Window
 
 
 
+    private static readonly System.Windows.Media.Brush RedWarningBrush = CreateFrozenBrush("#C62828");
+
+    private static readonly System.Windows.Media.Brush AmberWarningBrush = CreateFrozenBrush("#E68A00");
+
+    private static System.Windows.Media.Brush CreateFrozenBrush(string hex)
+    {
+        var brush = (System.Windows.Media.SolidColorBrush)new System.Windows.Media.BrushConverter().ConvertFromString(hex)!;
+        brush.Freeze();
+        return brush;
+    }
+
     private void UpdateIndexStatus(DateTime nowUtc)
 
     {
@@ -4048,33 +4059,29 @@ public partial class MainWindow : Window
 
             return;
 
-        var maxCap = memoryIndex.MaxEventCapacity;
+        // Live-session completeness (RAG). This is a trust warning, not a diagnostic, so it is always shown
+        // when data is actually being lost — independent of the status-bar diagnostics toggle.
+        var status = LiveCollectionAssessor.Assess(
+            memoryIndex.EventCount,
+            memoryIndex.MaxEventCapacity,
+            memoryIndex.EvictedEvents,
+            Interlocked.Read(ref _uiDroppedEvents));
 
-        if (maxCap <= 0)
-
-            return;
-
-        var count = memoryIndex.EventCount;
-
-        if (count >= (long)(0.9 * maxCap))
-
+        if (!status.ShouldWarn)
         {
-
-            IndexStatusTextBlock.Visibility = Visibility.Visible;
-
-            IndexStatusTextBlock.Text = $"Index ~{ (int)(100.0 * count / maxCap)}% full (eviction active). Consider raising Max events in Settings or exporting.";
-
-        }
-
-        else
-
-        {
-
             IndexStatusTextBlock.Visibility = Visibility.Collapsed;
-
             IndexStatusTextBlock.Text = "";
-
+            IndexStatusTextBlock.ToolTip = null;
+            return;
         }
+
+        IndexStatusTextBlock.Visibility = Visibility.Visible;
+        IndexStatusTextBlock.Text = status.Headline;
+        IndexStatusTextBlock.ToolTip = status.Detail;
+        IndexStatusTextBlock.FontWeight = FontWeights.Bold;
+        IndexStatusTextBlock.Foreground = status.Level == CollectionCompletenessLevel.Red
+            ? RedWarningBrush
+            : AmberWarningBrush;
 
     }
 
