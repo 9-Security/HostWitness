@@ -24,7 +24,7 @@ internal static class Program
     {
         try
         {
-        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles) = ParseArgs(args);
+        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
         {
@@ -40,7 +40,7 @@ internal static class Program
         var index = new InMemoryActivityIndex(maxEvents == 0 ? 0 : maxEvents);
         var exporter = new SnapshotExporter { UseVssSnapshots = true };
 
-        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles);
+        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles);
 
         using var cts = new CancellationTokenSource();
         foreach (var p in providers)
@@ -116,7 +116,7 @@ internal static class Program
         }
     }
 
-    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles) ParseArgs(string[] args)
+    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles, List<string> wmiFiles) ParseArgs(string[] args)
     {
         string? outputDir = null;
         var collectSeconds = DefaultCollectSeconds;
@@ -125,6 +125,7 @@ internal static class Program
         var evtxFiles = new List<string>();
         var srumFiles = new List<string>();
         var bitsFiles = new List<string>();
+        var wmiFiles = new List<string>();
 
         var positional = new List<string>();
         foreach (var a in args)
@@ -160,6 +161,12 @@ internal static class Program
                 bitsFiles.AddRange(list);
                 continue;
             }
+            if (arg.StartsWith("--wmi=", StringComparison.OrdinalIgnoreCase))
+            {
+                var list = arg.Substring("--wmi=".Length).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                wmiFiles.AddRange(list);
+                continue;
+            }
             positional.Add(arg);
         }
 
@@ -168,7 +175,7 @@ internal static class Program
         if (positional.Count > 1 && int.TryParse(positional[1], out var sec) && sec > 0)
             collectSeconds = sec;
 
-        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles);
+        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles);
     }
 
     private static bool IncludeProvider(string key, HashSet<string>? filter)
@@ -177,12 +184,13 @@ internal static class Program
         return filter.Contains(key);
     }
 
-    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null, List<string>? srumFiles = null, List<string>? bitsFiles = null)
+    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null, List<string>? srumFiles = null, List<string>? bitsFiles = null, List<string>? wmiFiles = null)
     {
         var providers = new List<IProvider>();
         var hasOfflineEvtx = evtxFiles != null && evtxFiles.Count > 0;
         var hasSrum = srumFiles != null && srumFiles.Count > 0;
         var hasBits = bitsFiles != null && bitsFiles.Count > 0;
+        var hasWmi = wmiFiles != null && wmiFiles.Count > 0;
 
         if (IncludeProvider("Process", providerFilter))
             providers.Add(new LiveProcessProvider());
@@ -226,6 +234,14 @@ internal static class Program
             foreach (var file in bitsFiles!)
                 bitsProvider.AddDatabase(file);
             providers.Add(bitsProvider);
+        }
+        // WMI persistence is opt-in; --wmi supplies the OBJECTS.DATA path(s).
+        if (hasWmi)
+        {
+            var wmiProvider = new WmiProvider();
+            foreach (var file in wmiFiles!)
+                wmiProvider.AddRepository(file);
+            providers.Add(wmiProvider);
         }
 
         var allowLiveRegistry = RegistryLivePolicy.IsLiveRegistryEnabled(settings);

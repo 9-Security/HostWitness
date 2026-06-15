@@ -3051,6 +3051,67 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void LoadWmiMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
+
+        try
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Load WMI CIM repository (OBJECTS.DATA)",
+                Filter = "WMI repository (OBJECTS.DATA)|OBJECTS.DATA|All files (*.*)|*.*",
+                FileName = "OBJECTS.DATA",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true)
+                return;
+
+            Mouse.OverrideCursor = Cursors.Wait;
+
+            var added = 0;
+            var provider = new WmiProvider();
+            provider.AddRepository(dialog.FileName);
+
+            void CountingHandler(object? s, ActivityEvent ev) => Interlocked.Increment(ref added);
+
+            provider.EventProduced += OnEventProduced;
+            provider.EventProduced += CountingHandler;
+            try
+            {
+                await provider.RunToCompletionAsync();
+            }
+            finally
+            {
+                provider.EventProduced -= OnEventProduced;
+                provider.EventProduced -= CountingHandler;
+            }
+
+            UpdateSharedContent();
+            TimelineViewControl?.Refresh();
+
+            Mouse.OverrideCursor = null;
+
+            MessageBox.Show(
+                $"Parsed WMI repository; recovered {added} subscription record(s) — filters, consumers, and bindings (tagged Mode=Offline, Category=Persistence).\n\nTriage only: verify a suspicious consumer's command/script against the live repository.",
+                "Load WMI", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Mouse.OverrideCursor = null;
+            LogToAppLog("Load WMI failed", ex);
+            MessageBox.Show($"Load failed: {ex.Message}", "Load WMI", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
+        }
+    }
+
     private void CloseSnapshotMenuItem_Click(object sender, RoutedEventArgs e)
 
     {
