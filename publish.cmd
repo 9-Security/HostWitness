@@ -60,7 +60,7 @@ if "%STABLE_GATE%"=="1" goto :run_gate
 
 :call_restore_build_test
 echo [publish.cmd] build/test chain via repo-local APPDATA ...
-set "BUILD_CHAIN=set APPDATA=%NUGET_APPDATA% & mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & del /q WinDFIR.UI\obj\*.tmp 2>nul & del /q WinDFIR.Tests\obj\*.tmp 2>nul & dotnet restore WinDFIR.UI\WinDFIR.UI.csproj -v minimal --disable-parallel && dotnet restore WinDFIR.Tests\WinDFIR.Tests.csproj -v minimal --disable-parallel && dotnet build WinDFIR.sln -c Release --no-restore -v minimal"
+set "BUILD_CHAIN=set APPDATA=%NUGET_APPDATA% & mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & del /q WinDFIR.UI\obj\*.tmp 2>nul & del /q WinDFIR.Tests\obj\*.tmp 2>nul & dotnet restore WinDFIR.sln -v minimal --disable-parallel && dotnet build WinDFIR.sln -c Release --no-restore -v minimal"
 if not "%SKIP_TESTS%"=="1" set "BUILD_CHAIN=%BUILD_CHAIN% && dotnet test WinDFIR.sln -c Release --no-restore"
 cmd.exe /d /c "%BUILD_CHAIN%"
 if errorlevel 1 (
