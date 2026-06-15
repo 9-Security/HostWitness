@@ -201,7 +201,7 @@ public class JumpListProvider : IProvider
     {
         try
         {
-            using var root = RootStorage.OpenRead(filePath, StorageModeFlags.LeaveOpen);
+            using var root = RootStorage.OpenRead(filePath);
             var entries = root.EnumerateEntries();
             var any = false;
             var destListMap = BuildDestListMap(root);
@@ -310,7 +310,7 @@ public class JumpListProvider : IProvider
         {
             try
             {
-                using var root = RootStorage.OpenRead(filePath, StorageModeFlags.LeaveOpen);
+                using var root = RootStorage.OpenRead(filePath);
                 var entries = root.EnumerateEntries();
                 var destListMap = BuildDestListMap(root);
                 var anyStructured = false;
