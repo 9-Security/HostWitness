@@ -318,6 +318,66 @@ public class SnapshotExporterTests
     }
 
     [Fact]
+    public async Task ExportAsync_CopiesOfflineEvtxArtifact_ToRawEvtx()
+    {
+        var index = new InMemoryActivityIndex(10);
+        var exporter = new SnapshotExporter { UseVssSnapshots = false };
+        var tempDir = Path.Combine(Path.GetTempPath(), "HostWitness_Evtx_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var evtxPath = Path.Combine(tempDir, "Security.evtx");
+            await File.WriteAllTextAsync(evtxPath, "demo-evtx-bytes");
+
+            // Two records from the same .evtx -> should be copied once, both references rewritten.
+            for (var i = 0; i < 2; i++)
+            {
+                index.AddEvent(new ActivityEvent
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Category = "Logon",
+                    Action = "Start",
+                    Summary = $"offline evtx record {i}",
+                    Evidence = new List<EvidenceRef> { new("EvtxFile", evtxPath) }
+                });
+            }
+
+            await exporter.ExportAsync(index, tempDir);
+
+            var snapshotDir = Directory.GetDirectories(tempDir)
+                .Single(path => Path.GetFileName(path).StartsWith("snapshot_", StringComparison.OrdinalIgnoreCase));
+
+            var json = await File.ReadAllTextAsync(Path.Combine(snapshotDir, "timeline.json"));
+            using var doc = JsonDocument.Parse(json);
+            var events = doc.RootElement.GetProperty("events");
+            foreach (var ev in events.EnumerateArray())
+            {
+                var reference = ev.GetProperty("evidence")[0].GetProperty("reference").GetString();
+                Assert.NotNull(reference);
+                Assert.StartsWith("raw/evtx/", reference!, StringComparison.OrdinalIgnoreCase);
+                Assert.EndsWith(".evtx", reference!, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var evtxDir = Path.Combine(snapshotDir, "raw", "evtx");
+            Assert.True(Directory.Exists(evtxDir));
+            Assert.Single(Directory.GetFiles(evtxDir)); // deduped: copied once despite two records
+
+            var manifest = await File.ReadAllTextAsync(Path.Combine(snapshotDir, "manifest.json"));
+            using var manifestDoc = JsonDocument.Parse(manifest);
+            var summary = manifestDoc.RootElement.GetProperty("collectionSummary");
+            Assert.Equal(1, summary.GetProperty("copiedArtifactFileCount").GetInt32());
+            Assert.Equal(0, summary.GetProperty("skippedEvidenceReferenceCount").GetInt32());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { /* ignore */ }
+            }
+        }
+    }
+
+    [Fact]
     public async Task ExportAsync_Manifest_TracksArtifactCopyCounts()
     {
         var index = new InMemoryActivityIndex(10);

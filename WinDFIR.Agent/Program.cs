@@ -24,7 +24,7 @@ internal static class Program
     {
         try
         {
-        var (outputDir, collectSeconds, enableEtw, providerFilter) = ParseArgs(args);
+        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
         {
@@ -40,7 +40,7 @@ internal static class Program
         var index = new InMemoryActivityIndex(maxEvents == 0 ? 0 : maxEvents);
         var exporter = new SnapshotExporter { UseVssSnapshots = true };
 
-        var providers = BuildProviders(settings, enableEtw, providerFilter);
+        var providers = BuildProviders(settings, enableEtw, providerFilter, evtxFiles);
 
         using var cts = new CancellationTokenSource();
         foreach (var p in providers)
@@ -116,12 +116,13 @@ internal static class Program
         }
     }
 
-    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter) ParseArgs(string[] args)
+    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles) ParseArgs(string[] args)
     {
         string? outputDir = null;
         var collectSeconds = DefaultCollectSeconds;
         var enableEtw = false;
         HashSet<string>? providerFilter = null;
+        var evtxFiles = new List<string>();
 
         var positional = new List<string>();
         foreach (var a in args)
@@ -139,6 +140,12 @@ internal static class Program
                 providerFilter = new HashSet<string>(list.Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
                 continue;
             }
+            if (arg.StartsWith("--evtx=", StringComparison.OrdinalIgnoreCase))
+            {
+                var list = arg.Substring("--evtx=".Length).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                evtxFiles.AddRange(list);
+                continue;
+            }
             positional.Add(arg);
         }
 
@@ -147,7 +154,7 @@ internal static class Program
         if (positional.Count > 1 && int.TryParse(positional[1], out var sec) && sec > 0)
             collectSeconds = sec;
 
-        return (outputDir, collectSeconds, enableEtw, providerFilter);
+        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles);
     }
 
     private static bool IncludeProvider(string key, HashSet<string>? filter)
@@ -156,16 +163,26 @@ internal static class Program
         return filter.Contains(key);
     }
 
-    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter)
+    private static List<IProvider> BuildProviders(HostWitnessSettings settings, bool enableEtw, HashSet<string>? providerFilter, List<string>? evtxFiles = null)
     {
         var providers = new List<IProvider>();
+        var hasOfflineEvtx = evtxFiles != null && evtxFiles.Count > 0;
 
         if (IncludeProvider("Process", providerFilter))
             providers.Add(new LiveProcessProvider());
         if (IncludeProvider("Net", providerFilter))
             providers.Add(new NetConnectionProvider());
-        if (IncludeProvider("EventLog", providerFilter))
-            providers.Add(new EventLogProvider());
+        // --evtx implies EventLog: offline .evtx parsing supersedes live-channel reading.
+        if (IncludeProvider("EventLog", providerFilter) || hasOfflineEvtx)
+        {
+            var eventLogProvider = new EventLogProvider();
+            if (hasOfflineEvtx)
+            {
+                foreach (var file in evtxFiles!)
+                    eventLogProvider.AddEvtxFile(file);
+            }
+            providers.Add(eventLogProvider);
+        }
         if (IncludeProvider("RecentLnk", providerFilter))
             providers.Add(new RecentLnkProvider());
         if (IncludeProvider("JumpList", providerFilter))

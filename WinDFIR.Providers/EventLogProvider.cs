@@ -40,6 +40,7 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
 
     private CancellationTokenSource? _cancellationTokenSource;
     private Task? _processingTask;
+    private readonly List<string> _evtxFilePaths = new();
     private readonly ulong _bootId;
     private readonly Dictionary<uint, (DateTime CreateTime, DateTime LastSeenUtc, bool IsProvisional, bool IsLongLived)> _processCreateTimes = new();
     private readonly object _processCreateLock = new();
@@ -57,6 +58,26 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
     /// <see cref="EventLogNotFoundException"/>, or <see cref="EventLogReadingException"/> to exercise degrade paths.
     /// </summary>
     internal Func<string, EventLogReader?>? CreateEventLogReaderForTest { get; set; }
+
+    /// <summary>
+    /// Offline <c>.evtx</c> files to parse instead of the live host's channels. When any are registered the
+    /// provider runs in offline-only mode (it does not read the live event logs). Populate via
+    /// <see cref="AddEvtxFile"/> before <see cref="StartAsync"/>.
+    /// </summary>
+    public IReadOnlyList<string> EvtxFilePaths => _evtxFilePaths.AsReadOnly();
+
+    /// <summary>True when at least one offline <c>.evtx</c> file has been registered.</summary>
+    public bool IsOfflineMode => _evtxFilePaths.Count > 0;
+
+    /// <summary>
+    /// Register an exported <c>.evtx</c> file (from a dead box, VSS copy, or another tool) for offline parsing.
+    /// Switches the provider to offline-only mode. No-op for blank paths.
+    /// </summary>
+    public void AddEvtxFile(string filePath)
+    {
+        if (!string.IsNullOrWhiteSpace(filePath))
+            _evtxFilePaths.Add(filePath);
+    }
 
     public EventLogProvider()
     {
@@ -80,6 +101,18 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Starts the provider and awaits completion. Offline <c>.evtx</c> parsing has a definite end (the files
+    /// are drained), unlike live channel monitoring, so on-demand callers can await this to know when all
+    /// events have been emitted.
+    /// </summary>
+    public async Task RunToCompletionAsync(CancellationToken cancellationToken = default)
+    {
+        await StartAsync(cancellationToken);
+        if (_processingTask != null)
+            await _processingTask;
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         _cancellationTokenSource?.Cancel();
@@ -99,6 +132,20 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
 
     private async Task ProcessEventLogs(CancellationToken cancellationToken)
     {
+        // Offline mode: parse the supplied .evtx files only; do not touch the live host's logs.
+        if (_evtxFilePaths.Count > 0)
+        {
+            foreach (var filePath in _evtxFilePaths)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                    return;
+
+                await ProcessEvtxFileIfAvailable(filePath, cancellationToken);
+            }
+
+            return;
+        }
+
         var logNames = new[] { "Security", "System", "Application" };
 
         foreach (var logName in logNames)
@@ -141,34 +188,7 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
                 reader = new EventLogReader(logName, PathType.LogName);
             }
 
-            using (reader)
-            {
-                EventRecord? record;
-                var processed = 0;
-
-                while ((record = reader.ReadEvent()) != null && !cancellationToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        ProcessEventRecord(record, logName);
-                        processed++;
-                        if (processed >= MaxEventsPerLog)
-                            break;
-                    }
-                    catch
-                    {
-                        // Skip records we can't process
-                    }
-                    finally
-                    {
-                        record.Dispose();
-                    }
-
-                    await Task.Yield(); // Allow cancellation
-                }
-
-                return true;
-            }
+            return await ProcessReader(reader, logName, null, cancellationToken);
         }
         catch (UnauthorizedAccessException)
         {
@@ -190,7 +210,114 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
         return false;
     }
 
-    private void ProcessEventRecord(EventRecord record, string logName)
+    /// <summary>
+    /// Parses one offline <c>.evtx</c> file via <see cref="PathType.FilePath"/>. The per-record channel name
+    /// is resolved from the record itself (falling back to the file name), so a <c>Security.evtx</c> still
+    /// maps event ID 4688 to Process/Start. Returns false if the file is missing or unreadable.
+    /// </summary>
+    private async Task<bool> ProcessEvtxFileIfAvailable(string filePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!File.Exists(filePath))
+                return false;
+
+            var reader = new EventLogReader(new EventLogQuery(filePath, PathType.FilePath));
+            return await ProcessReader(reader, null, filePath, cancellationToken);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // File access may require elevation
+        }
+        catch (EventLogNotFoundException)
+        {
+            // Not a valid .evtx path
+        }
+        catch (EventLogReadingException)
+        {
+            // Corrupt or unreadable .evtx
+        }
+        catch
+        {
+            // Other errors (invalid file, unsupported format, etc.)
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Shared read loop for live and offline sources. When <paramref name="fixedLogName"/> is null the channel
+    /// name is resolved per record (offline mode); <paramref name="offlineSource"/> tags events with their
+    /// source file. Returns true once the reader was drained (possibly zero events).
+    /// </summary>
+    private async Task<bool> ProcessReader(EventLogReader reader, string? fixedLogName, string? offlineSource, CancellationToken cancellationToken)
+    {
+        using (reader)
+        {
+            EventRecord? record;
+            var processed = 0;
+
+            while ((record = reader.ReadEvent()) != null && !cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var logName = fixedLogName ?? ResolveOfflineLogName(record, offlineSource);
+                    ProcessEventRecord(record, logName, offlineSource);
+                    processed++;
+                    if (processed >= MaxEventsPerLog)
+                        break;
+                }
+                catch
+                {
+                    // Skip records we can't process
+                }
+                finally
+                {
+                    record.Dispose();
+                }
+
+                await Task.Yield(); // Allow cancellation
+            }
+
+            return true;
+        }
+    }
+
+    private static string ResolveOfflineLogName(EventRecord record, string? filePath)
+    {
+        string? channel = null;
+        try
+        {
+            channel = record.LogName;
+        }
+        catch
+        {
+            // Some records do not expose a channel; fall back to the file name.
+        }
+
+        if (!string.IsNullOrWhiteSpace(channel))
+            return channel!;
+
+        return DeriveLogNameFromEvtxPath(filePath);
+    }
+
+    /// <summary>
+    /// Derives a channel name from an exported <c>.evtx</c> file name. Exported operational channels encode
+    /// the <c>/</c> separator as <c>%4</c> (e.g. <c>Microsoft-Windows-PowerShell%4Operational.evtx</c>).
+    /// </summary>
+    internal static string DeriveLogNameFromEvtxPath(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return "OfflineEvtx";
+
+        var name = Path.GetFileNameWithoutExtension(filePath);
+        if (string.IsNullOrEmpty(name))
+            return "OfflineEvtx";
+
+        return name.Replace("%4", "/");
+    }
+
+    private void ProcessEventRecord(EventRecord record, string logName, string? offlineSource = null)
     {
         var timestamp = record.TimeCreated?.ToUniversalTime() ?? DateTime.UtcNow;
         var eventId = record.Id;
@@ -202,11 +329,11 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
 
         var evidence = new List<EvidenceRef>
         {
-            new EvidenceRef(
-                "EventLog",
-                $"{logName}:{record.RecordId}",
-                null,
-                timestamp)
+            offlineSource != null
+                // Point at the source .evtx file (rooted) so the export can bundle it into raw/; the specific
+                // record is identified by the RecordId field below.
+                ? new EvidenceRef("EvtxFile", offlineSource, null, timestamp)
+                : new EvidenceRef("EventLog", $"{logName}:{record.RecordId}", null, timestamp)
         };
 
         var fields = new Dictionary<string, object>
@@ -218,6 +345,11 @@ public class EventLogProvider : IProvider, IProcessCreateCacheStatsProvider
             ["RecordId"] = record.RecordId ?? 0,
             ["MachineName"] = record.MachineName ?? Environment.MachineName
         };
+        if (offlineSource != null)
+        {
+            fields["Mode"] = "Offline";
+            fields["OfflineSource"] = offlineSource;
+        }
 
         // Extract process information from event properties
         ProcessKey? processKey = null;

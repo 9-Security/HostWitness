@@ -53,6 +53,7 @@
                 <MenuItem Header="_Export Snapshot" Click="ExportButton_Click" ToolTip="Export current index to Snapshot folder — Ctrl+E"/>
                 <MenuItem Header="Export to _SQLite..." Click="ExportToSqliteMenuItem_Click" ToolTip="Export current timeline to a SQLite database for offline query"/>
                 <MenuItem Header="_Open from SQLite..." Click="OpenFromSqliteMenuItem_Click" ToolTip="Load timeline from a SQLite database (created by Export to SQLite)"/>
+                <MenuItem Header="Load Event Log (._evtx)..." Click="LoadEvtxMenuItem_Click" ToolTip="Parse one or more offline .evtx files (from a dead box, VSS copy, or another tool) into the current session"/>
                 <Separator/>
                 <MenuItem Header="Save _session now" Click="SaveSessionMenuItem_Click" ToolTip="Save current timeline to last session (restore on next start)"/>
                 <MenuItem Header="Save _layout now" Click="SaveLayoutMenuItem_Click" ToolTip="Save window position, size, and tab selection"/>

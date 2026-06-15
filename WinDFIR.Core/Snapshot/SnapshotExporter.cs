@@ -515,6 +515,7 @@ public class SnapshotExporter : ISnapshotExporter
             case "ScheduledTask":
             case "PowerShellHistory":
             case "StartupFolder":
+            case "EvtxFile":
                 artifactSourcePath = evidence.Reference;
                 return Path.IsPathRooted(artifactSourcePath);
             case "BrowserHistory":
@@ -536,6 +537,7 @@ public class SnapshotExporter : ISnapshotExporter
             "ScheduledTask" => "tasks",
             "PowerShellHistory" => "powershell",
             "StartupFolder" => "startup",
+            "EvtxFile" => "evtx",
             _ => "other"
         };
     }
@@ -555,6 +557,7 @@ public class SnapshotExporter : ISnapshotExporter
             "ScheduledTask" => IsAllowedScheduledTaskFile(path),
             "PowerShellHistory" => fileName.Equals("ConsoleHost_history.txt", StringComparison.OrdinalIgnoreCase),
             "StartupFolder" => IsAllowedStartupFile(path),
+            "EvtxFile" => fileName.EndsWith(".evtx", StringComparison.OrdinalIgnoreCase),
             _ => false
         };
     }

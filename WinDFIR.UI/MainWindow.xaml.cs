@@ -2862,6 +2862,73 @@ public partial class MainWindow : Window
 
 
 
+    private async void LoadEvtxMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isLongOpRunning)
+            return;
+        _isLongOpRunning = true;
+
+        try
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Load offline event log(s)",
+                Filter = "Event log files (*.evtx)|*.evtx|All files (*.*)|*.*",
+                Multiselect = true,
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true)
+                return;
+
+            var files = dialog.FileNames;
+            if (files.Length == 0)
+                return;
+
+            Mouse.OverrideCursor = Cursors.Wait;
+
+            var added = 0;
+            var provider = new EventLogProvider();
+            foreach (var file in files)
+                provider.AddEvtxFile(file);
+
+            void CountingHandler(object? s, ActivityEvent ev) => Interlocked.Increment(ref added);
+
+            provider.EventProduced += OnEventProduced;
+            provider.EventProduced += CountingHandler;
+            try
+            {
+                await provider.RunToCompletionAsync();
+            }
+            finally
+            {
+                provider.EventProduced -= OnEventProduced;
+                provider.EventProduced -= CountingHandler;
+            }
+
+            UpdateSharedContent();
+            EventLogViewControl?.Refresh();
+            TimelineViewControl?.Refresh();
+
+            Mouse.OverrideCursor = null;
+
+            MessageBox.Show(
+                $"Parsed {files.Length} offline event log file(s); added {added} event(s) to the current session.\n\nView them in the Event Log and Timeline tabs (tagged Mode=Offline).",
+                "Load Event Log (.evtx)", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            Mouse.OverrideCursor = null;
+            LogToAppLog("Load .evtx failed", ex);
+            MessageBox.Show($"Load failed: {ex.Message}", "Load Event Log (.evtx)", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+            _isLongOpRunning = false;
+        }
+    }
+
     private void CloseSnapshotMenuItem_Click(object sender, RoutedEventArgs e)
 
     {
