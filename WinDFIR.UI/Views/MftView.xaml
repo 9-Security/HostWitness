@@ -23,6 +23,7 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
             <Button Content="Load MFT file..." Click="ChooseFile_Click" Padding="8,4" Margin="0,0,10,0"/>
             <Button Content="Load from Volumes..." Click="LoadFromVolume_Click" Padding="8,4" Margin="0,0,10,0" ToolTip="Load one or more NTFS volumes. Each volume opens in its own tab."/>
+            <Button Content="Merge all sources" Click="MergeSources_Click" Padding="8,4" Margin="0,0,10,0" ToolTip="Combine all loaded volume/file tabs into one &quot;All sources&quot; view so you can search and compare across volumes without switching tabs."/>
 
             <Button Content="Export CSV..." Click="ExportCsv_Click" Padding="8,4" Margin="0,0,5,0" ToolTip="Export the selected MFT tab to CSV" IsEnabled="{Binding HasSelectedTab}"/>
             <Button Content="Export JSON..." Click="ExportJson_Click" Padding="8,4" ToolTip="Export the selected MFT tab to JSON" IsEnabled="{Binding HasSelectedTab}"/>

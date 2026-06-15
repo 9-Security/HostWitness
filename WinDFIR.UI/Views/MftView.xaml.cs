@@ -28,6 +28,8 @@ public partial class MftView : UserControl
         await _viewModel.LoadFromVolumesAsync(dlg.DriveLetters);
     }
 
+    private async void MergeSources_Click(object sender, RoutedEventArgs e) => await _viewModel.MergeAllSourcesAsync();
+
     public void Refresh()
     {
     }

@@ -13,7 +13,8 @@ namespace WinDFIR.UI.ViewModels;
 internal enum MftLoadSourceKind
 {
     File,
-    Volume
+    Volume,
+    Merged
 }
 
 public sealed class MftTabViewModel : BaseViewModel
@@ -56,6 +57,9 @@ public sealed class MftTabViewModel : BaseViewModel
     internal MftLoadSourceKind SourceKind { get; }
     public string SourceKey { get; }
     public string Header { get; }
+
+    /// <summary>True for the synthetic "All sources" tab that aggregates entries from the per-source tabs.</summary>
+    public bool IsMerged => SourceKind == MftLoadSourceKind.Merged;
 
     public string SourceDisplay
     {
@@ -285,6 +289,18 @@ public sealed class MftTabViewModel : BaseViewModel
 
         var parsedEntries = await ParseEntriesForSourceAsync(stream, recordSize, sourceLabel, volumeLetter).ConfigureAwait(true);
         await CompleteLoadFromParsedEntriesAsync(parsedEntries, sourceLabel, recordSize, statusNotes).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Populates this tab directly from already-parsed entries (used by the merged "All sources" tab).
+    /// The entries are expected to already carry their <c>Source</c> label and resolved <c>FullPath</c> —
+    /// no parsing or path re-resolution is performed here (per-source RecordIndex values collide across
+    /// volumes, so re-running BuildFullPaths on the combined set would be wrong).
+    /// </summary>
+    public async Task LoadFromEntriesAsync(IReadOnlyList<MftEntry> entries, string completionStatus)
+    {
+        var list = entries as List<MftEntry> ?? new List<MftEntry>(entries);
+        await ApplyLoadedEntriesAsync(list, completionStatus).ConfigureAwait(true);
     }
 
     private async Task CompleteLoadFromParsedEntriesAsync(List<MftEntry> parsedEntries, string sourceLabel, int recordSize, List<string> statusNotes)

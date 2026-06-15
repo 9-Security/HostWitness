@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 using WinDFIR.Core.IO;
+using WinDFIR.Core.Mft;
 
 namespace WinDFIR.UI.ViewModels;
 
@@ -94,6 +95,99 @@ public class MftViewModel : BaseViewModel
         {
             _isLoadingSources = false;
         }
+    }
+
+    /// <summary>
+    /// Builds (or refreshes) the synthetic "All sources" tab by concatenating the entries already loaded in
+    /// every per-source tab, so an analyst can search/filter and compare across volumes without switching tabs.
+    /// </summary>
+    public async Task MergeAllSourcesAsync()
+    {
+        if (_isLoadingSources)
+        {
+            if (SelectedTab != null)
+                SelectedTab.Status = "MFT load already in progress.";
+            return;
+        }
+
+        var sourceTabs = Tabs.Where(tab => tab.SourceKind != MftLoadSourceKind.Merged).ToList();
+        var mergedTab = GetOrCreateMergedTab();
+        SelectedTab = mergedTab;
+
+        if (sourceTabs.Count == 0)
+        {
+            mergedTab.SetFailure("No MFT sources loaded yet. Load one or more volumes or files first, then merge.");
+            return;
+        }
+
+        _isLoadingSources = true;
+        try
+        {
+            mergedTab.BeginLoading("All sources (merged)", "Merging loaded MFT sources...");
+
+            var result = BuildMergedEntries(sourceTabs.Select(tab => tab.Entries).ToList(), MftTabViewModel.UiEntryCap);
+
+            var status = $"Merged {result.Entries.Count:n0} MFT entries from {result.SourceCount} source(s). " +
+                         "Use the Source column and filters to compare across volumes.";
+            if (result.Truncated)
+                status = $"Merged view truncated to the {MftTabViewModel.UiEntryCap:n0}-entry display cap (combined sources are larger). " + status;
+            if (sourceTabs.Any(tab => tab.Status.Contains("PARTIAL / CAPPED", StringComparison.OrdinalIgnoreCase)))
+                status = "PARTIAL / CAPPED MFT SOURCE — " + status;
+
+            await mergedTab.LoadFromEntriesAsync(result.Entries, status).ConfigureAwait(true);
+        }
+        finally
+        {
+            mergedTab.EndLoading();
+            _isLoadingSources = false;
+        }
+    }
+
+    /// <summary>Result of concatenating per-source MFT entries for the merged view.</summary>
+    public readonly record struct MergedMftResult(IReadOnlyList<MftEntry> Entries, int SourceCount, bool Truncated);
+
+    /// <summary>
+    /// Pure concatenation of per-source entry lists for the merged view, honouring the display cap.
+    /// Order is source-grouped (each source appended whole); the per-entry <c>Source</c> column disambiguates
+    /// rows. <paramref name="cap"/> of 0 means unbounded. Kept static/pure so the merge rules are unit-testable.
+    /// </summary>
+    public static MergedMftResult BuildMergedEntries(IReadOnlyList<IReadOnlyList<MftEntry>> perSourceEntries, int cap)
+    {
+        var sources = perSourceEntries.Where(source => source != null).ToList();
+        var merged = new List<MftEntry>();
+        var truncated = false;
+
+        foreach (var source in sources)
+        {
+            foreach (var entry in source)
+            {
+                if (cap > 0 && merged.Count >= cap)
+                {
+                    truncated = true;
+                    break;
+                }
+                merged.Add(entry);
+            }
+            if (truncated)
+                break;
+        }
+
+        return new MergedMftResult(merged, sources.Count, truncated);
+    }
+
+    internal MftTabViewModel GetOrCreateMergedTab()
+    {
+        var existing = Tabs.FirstOrDefault(tab => tab.SourceKind == MftLoadSourceKind.Merged);
+        if (existing != null)
+            return existing;
+
+        var created = new MftTabViewModel(
+            MftLoadSourceKind.Merged,
+            "*merged*",
+            "All sources",
+            "All sources (merged)");
+        Tabs.Add(created);
+        return created;
     }
 
     public string? ExportSelectedTabToCsv(string filePath)
