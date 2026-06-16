@@ -21,7 +21,8 @@ namespace WinDFIR.Agent;
 /// For remote deployment: copy HostWitness.Agent.exe to target, run with output path, copy back the snapshot folder.
 /// Optionally pass --repo=&lt;target&gt; to publish the finished bundle into a central case repository so
 /// collections from many investigated hosts gather in one place. The target is either a filesystem path
-/// (shared folder / mounted bucket) or an http(s):// URL of an evidence-intake server.
+/// (shared folder / mounted bucket) or an http(s):// URL of an evidence-intake server. For an HTTP intake
+/// that requires authentication, pass --repo-token=&lt;shared-secret&gt; (sent as a bearer token).
 ///
 /// Exit codes: 0 = success, 1 = export/general failure, 2 = provider stop failure, 3 = repository publish failure.
 /// </summary>
@@ -33,7 +34,7 @@ internal static class Program
     {
         try
         {
-        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles, repoPath) = ParseArgs(args);
+        var (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles, repoPath, repoToken) = ParseArgs(args);
 
         if (string.IsNullOrEmpty(outputDir))
         {
@@ -148,7 +149,7 @@ internal static class Program
                     || repoPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
                     httpClient = new HttpClient();
-                    sink = new HttpArtifactSink(httpClient, repoPath);
+                    sink = new HttpArtifactSink(httpClient, repoPath, repoToken);
                 }
                 else
                 {
@@ -196,7 +197,7 @@ internal static class Program
         }
     }
 
-    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles, List<string> wmiFiles, string? repoPath) ParseArgs(string[] args)
+    private static (string? outputDir, int collectSeconds, bool enableEtw, HashSet<string>? providerFilter, List<string> evtxFiles, List<string> srumFiles, List<string> bitsFiles, List<string> wmiFiles, string? repoPath, string? repoToken) ParseArgs(string[] args)
     {
         string? outputDir = null;
         var collectSeconds = DefaultCollectSeconds;
@@ -207,6 +208,7 @@ internal static class Program
         var bitsFiles = new List<string>();
         var wmiFiles = new List<string>();
         string? repoPath = null;
+        string? repoToken = null;
 
         var positional = new List<string>();
         foreach (var a in args)
@@ -255,6 +257,13 @@ internal static class Program
                     repoPath = value;
                 continue;
             }
+            if (arg.StartsWith("--repo-token=", StringComparison.OrdinalIgnoreCase))
+            {
+                var value = arg.Substring("--repo-token=".Length).Trim().Trim('"');
+                if (!string.IsNullOrEmpty(value))
+                    repoToken = value;
+                continue;
+            }
             positional.Add(arg);
         }
 
@@ -263,7 +272,7 @@ internal static class Program
         if (positional.Count > 1 && int.TryParse(positional[1], out var sec) && sec > 0)
             collectSeconds = sec;
 
-        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles, repoPath);
+        return (outputDir, collectSeconds, enableEtw, providerFilter, evtxFiles, srumFiles, bitsFiles, wmiFiles, repoPath, repoToken);
     }
 
     private static bool IncludeProvider(string key, HashSet<string>? filter)

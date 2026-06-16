@@ -119,6 +119,54 @@ public sealed class HttpArtifactSinkTests : IDisposable
     }
 
     [Fact]
+    public async Task Publish_Succeeds_WhenTokenMatches()
+    {
+        var collectionId = Guid.NewGuid().ToString("D");
+        var bundle = await CreateBundleAsync("c1", collectionId);
+        var repoRoot = Path.Combine(_workDir, "repo");
+        var service = new BundleIntakeService(repoRoot);
+        using var http = NewInProcessClient(service, expectedToken: "s3cret");
+        var sink = new HttpArtifactSink(http, "http://intake.test/", authToken: "s3cret");
+
+        var result = await sink.PublishBundleAsync(bundle);
+
+        Assert.Equal(BundlePublishStatus.Published, result.Status);
+    }
+
+    [Theory]
+    [InlineData("wrong-token")]
+    [InlineData(null)]
+    public async Task Publish_Fails_WhenTokenMissingOrWrong(string? presentedToken)
+    {
+        var collectionId = Guid.NewGuid().ToString("D");
+        var bundle = await CreateBundleAsync("c1", collectionId);
+        var repoRoot = Path.Combine(_workDir, "repo");
+        var service = new BundleIntakeService(repoRoot);
+        using var http = NewInProcessClient(service, expectedToken: "s3cret");
+        var sink = new HttpArtifactSink(http, "http://intake.test/", authToken: presentedToken);
+
+        var result = await sink.PublishBundleAsync(bundle);
+
+        Assert.Equal(BundlePublishStatus.Failed, result.Status);
+        Assert.NotEmpty(result.Issues);
+        // A rejected client must not have created any repository entry.
+        Assert.False(Directory.Exists(Path.Combine(repoRoot, Environment.MachineName, collectionId)));
+    }
+
+    [Theory]
+    [InlineData(null, null, true)]          // auth disabled -> always allowed
+    [InlineData("", "anything", true)]       // empty expected -> auth disabled
+    [InlineData("tok", null, false)]         // required but none presented
+    [InlineData("tok", "Bearer wrong", false)]
+    [InlineData("tok", "Bearer tok", true)]
+    [InlineData("tok", "bearer tok", true)]  // scheme is case-insensitive
+    [InlineData("tok", "tok", false)]        // missing scheme prefix
+    public void IntakeAuth_IsAuthorized_Cases(string? expected, string? header, bool allowed)
+    {
+        Assert.Equal(allowed, IntakeAuth.IsAuthorized(header, expected));
+    }
+
+    [Fact]
     public async Task ReceiveFile_RejectsPathTraversal_AndHashMismatch()
     {
         var repoRoot = Path.Combine(_workDir, "repo");
@@ -187,10 +235,42 @@ public sealed class HttpArtifactSinkTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RealSocket_EnforcesToken()
+    {
+        var collectionId = Guid.NewGuid().ToString("D");
+        var bundle = await CreateBundleAsync("c1", collectionId);
+        var repoRoot = Path.Combine(_workDir, "repo");
+        var service = new BundleIntakeService(repoRoot);
+
+        var prefix = $"http://localhost:{GetFreePort()}/";
+        HttpListenerBundleIntakeServer server;
+        try
+        {
+            server = new HttpListenerBundleIntakeServer(service, prefix, authToken: "s3cret");
+            server.Start();
+        }
+        catch (HttpListenerException)
+        {
+            return; // needs a URL ACL on this machine; skip the socket test
+        }
+
+        using (server)
+        using (var http = new HttpClient())
+        {
+            var wrong = await new HttpArtifactSink(http, prefix, authToken: "nope").PublishBundleAsync(bundle);
+            Assert.Equal(BundlePublishStatus.Failed, wrong.Status);
+            Assert.False(Directory.Exists(Path.Combine(repoRoot, Environment.MachineName, collectionId)));
+
+            var right = await new HttpArtifactSink(http, prefix, authToken: "s3cret").PublishBundleAsync(bundle);
+            Assert.Equal(BundlePublishStatus.Published, right.Status);
+        }
+    }
+
     // --- helpers ---
 
-    private static HttpClient NewInProcessClient(BundleIntakeService service) =>
-        new(new InProcessIntakeHandler(service)) { BaseAddress = new Uri("http://intake.test/") };
+    private static HttpClient NewInProcessClient(BundleIntakeService service, string? expectedToken = null) =>
+        new(new InProcessIntakeHandler(service, expectedToken)) { BaseAddress = new Uri("http://intake.test/") };
 
     private static int GetFreePort()
     {
@@ -244,11 +324,21 @@ public sealed class HttpArtifactSinkTests : IDisposable
     private sealed class InProcessIntakeHandler : HttpMessageHandler
     {
         private readonly BundleIntakeService _service;
+        private readonly string? _expectedToken;
 
-        public InProcessIntakeHandler(BundleIntakeService service) => _service = service;
+        public InProcessIntakeHandler(BundleIntakeService service, string? expectedToken = null)
+        {
+            _service = service;
+            _expectedToken = expectedToken;
+        }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            request.Headers.TryGetValues(IntakeAuth.HeaderName, out var authValues);
+            var authHeader = authValues is null ? null : string.Join(",", authValues);
+            if (!IntakeAuth.IsAuthorized(authHeader, _expectedToken))
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
             var segments = request.RequestUri!.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (segments.Length < 3 || segments[0] != "bundles")
                 return new HttpResponseMessage(HttpStatusCode.NotFound);

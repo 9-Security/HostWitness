@@ -14,13 +14,16 @@ public sealed class HttpListenerBundleIntakeServer : IDisposable
 {
     private readonly HttpListener _listener = new();
     private readonly BundleIntakeService _service;
+    private readonly string? _authToken;
     private readonly CancellationTokenSource _cts = new();
     private Task? _acceptLoop;
 
-    public HttpListenerBundleIntakeServer(BundleIntakeService service, string urlPrefix)
+    /// <param name="authToken">Shared secret required on every request; null/empty disables auth (trusted-LAN mode).</param>
+    public HttpListenerBundleIntakeServer(BundleIntakeService service, string urlPrefix, string? authToken = null)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         ArgumentException.ThrowIfNullOrWhiteSpace(urlPrefix);
+        _authToken = authToken;
         _listener.Prefixes.Add(urlPrefix.EndsWith('/') ? urlPrefix : urlPrefix + "/");
     }
 
@@ -56,6 +59,12 @@ public sealed class HttpListenerBundleIntakeServer : IDisposable
     {
         try
         {
+            if (!IntakeAuth.IsAuthorized(context.Request.Headers[IntakeAuth.HeaderName], _authToken))
+            {
+                await WriteStatusAsync(context, HttpStatusCode.Unauthorized);
+                return;
+            }
+
             var segments = context.Request.Url!.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (segments.Length < 3 || !segments[0].Equals("bundles", StringComparison.OrdinalIgnoreCase))
             {

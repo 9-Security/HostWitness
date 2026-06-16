@@ -19,14 +19,17 @@ public sealed class HttpArtifactSink : IArtifactSink
 {
     private readonly HttpClient _httpClient;
     private readonly Uri _baseUri;
+    private readonly string? _authToken;
 
-    /// <param name="httpClient">Caller-owned client (lifetime, auth headers, and timeouts are the caller's concern).</param>
+    /// <param name="httpClient">Caller-owned client (lifetime and timeouts are the caller's concern).</param>
     /// <param name="baseUrl">Intake base URL, e.g. https://intake.example/.</param>
-    public HttpArtifactSink(HttpClient httpClient, string baseUrl)
+    /// <param name="authToken">Optional shared secret sent as a bearer token on every request.</param>
+    public HttpArtifactSink(HttpClient httpClient, string baseUrl, string? authToken = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
         _baseUri = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/");
+        _authToken = authToken;
     }
 
     public string Describe() => $"HTTP evidence intake at '{_baseUri}'";
@@ -58,7 +61,16 @@ public sealed class HttpArtifactSink : IArtifactSink
                 "manifest.json has no collectionId; cannot key the bundle in the repository.", hostname: hostname);
 
         // 1. Status: short-circuit if already present, otherwise learn what is already staged (resume).
-        var status = await GetStatusAsync(collectionId!, cancellationToken);
+        BundleStatusResponse status;
+        try
+        {
+            status = await GetStatusAsync(collectionId!, cancellationToken);
+        }
+        catch (IntakeUnauthorizedException)
+        {
+            return BundlePublishResult.Fail(
+                "Intake rejected the credentials (HTTP 401). Check the configured intake token.", collectionId, hostname);
+        }
         if (status.Complete)
         {
             return new BundlePublishResult
@@ -128,16 +140,21 @@ public sealed class HttpArtifactSink : IArtifactSink
 
     private async Task<BundleStatusResponse> GetStatusAsync(string collectionId, CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.GetAsync(
-            new Uri(_baseUri, HttpIntakeContract.StatusPath(collectionId)), cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(_baseUri, HttpIntakeContract.StatusPath(collectionId)));
+        AddAuth(request);
 
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
             return new BundleStatusResponse();
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new IntakeUnauthorizedException();
 
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<BundleStatusResponse>(HttpIntakeContract.Json, cancellationToken)
                ?? new BundleStatusResponse();
     }
+
+    private sealed class IntakeUnauthorizedException : Exception;
 
     private async Task UploadFileAsync(string collectionId, string relative, string sha, string filePath, CancellationToken cancellationToken)
     {
@@ -149,6 +166,7 @@ public sealed class HttpArtifactSink : IArtifactSink
         {
             Content = content
         };
+        AddAuth(request);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -161,10 +179,17 @@ public sealed class HttpArtifactSink : IArtifactSink
         {
             Content = new StringContent(string.Empty)
         };
+        AddAuth(request);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<BundleCompleteResponse>(HttpIntakeContract.Json, cancellationToken)
                ?? new BundleCompleteResponse { Issues = { "Intake returned an empty completion response." } };
+    }
+
+    private void AddAuth(HttpRequestMessage request)
+    {
+        if (!string.IsNullOrEmpty(_authToken))
+            request.Headers.TryAddWithoutValidation(IntakeAuth.HeaderName, IntakeAuth.BuildHeaderValue(_authToken));
     }
 }
