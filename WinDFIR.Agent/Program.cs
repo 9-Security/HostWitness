@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using WinDFIR.Core.Analysis;
@@ -18,8 +19,9 @@ namespace WinDFIR.Agent;
 /// <summary>
 /// Headless agent: runs the same collectors as the UI app and exports a snapshot to disk.
 /// For remote deployment: copy HostWitness.Agent.exe to target, run with output path, copy back the snapshot folder.
-/// Optionally pass --repo=&lt;path&gt; (a shared folder / mounted bucket) to publish the finished bundle into a
-/// central case repository so collections from many investigated hosts gather in one place.
+/// Optionally pass --repo=&lt;target&gt; to publish the finished bundle into a central case repository so
+/// collections from many investigated hosts gather in one place. The target is either a filesystem path
+/// (shared folder / mounted bucket) or an http(s):// URL of an evidence-intake server.
 ///
 /// Exit codes: 0 = success, 1 = export/general failure, 2 = provider stop failure, 3 = repository publish failure.
 /// </summary>
@@ -136,9 +138,23 @@ internal static class Program
         // succeeded above, so a publish failure is reported distinctly (exit 3) — the local bundle is intact.
         if (!string.IsNullOrEmpty(repoPath))
         {
+            HttpClient? httpClient = null;
             try
             {
-                var sink = new FileSystemArtifactSink(repoPath);
+                // A URL routes to the HTTP evidence intake; any other value is a filesystem path
+                // (local dir, UNC share, or mounted bucket). Both honor the same IArtifactSink contract.
+                IArtifactSink sink;
+                if (repoPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                    || repoPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    httpClient = new HttpClient();
+                    sink = new HttpArtifactSink(httpClient, repoPath);
+                }
+                else
+                {
+                    sink = new FileSystemArtifactSink(repoPath);
+                }
+
                 Console.WriteLine($"Publishing bundle to {sink.Describe()}...");
                 var result = await sink.PublishBundleAsync(bundlePath);
                 switch (result.Status)
@@ -161,6 +177,10 @@ internal static class Program
             {
                 Console.Error.WriteLine($"Publish failed: {ex.Message}");
                 return 3;
+            }
+            finally
+            {
+                httpClient?.Dispose();
             }
         }
 

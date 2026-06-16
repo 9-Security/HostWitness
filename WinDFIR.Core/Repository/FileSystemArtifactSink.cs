@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using WinDFIR.Core.Snapshot;
 
 namespace WinDFIR.Core.Repository;
@@ -36,7 +34,7 @@ public sealed class FileSystemArtifactSink : IArtifactSink
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bundleDirectory);
 
-        var sourceDir = ResolveBundleDirectory(bundleDirectory);
+        var sourceDir = BundleLayout.ResolveBundleDirectory(bundleDirectory);
         if (sourceDir is null)
             return BundlePublishResult.Fail($"No snapshot bundle (timeline.json) found under '{bundleDirectory}'.");
 
@@ -46,13 +44,13 @@ public sealed class FileSystemArtifactSink : IArtifactSink
         if (sourceIntegrity.Status != SnapshotIntegrityStatus.Verified)
             return BundlePublishResult.Fail(ResolveIssues(sourceIntegrity, "Source bundle"));
 
-        var (collectionId, hostname) = await ReadBundleIdentityAsync(sourceDir, cancellationToken);
+        var (collectionId, hostname) = await BundleLayout.ReadIdentityAsync(sourceDir, cancellationToken);
         if (string.IsNullOrWhiteSpace(collectionId))
             return BundlePublishResult.Fail(
                 "manifest.json has no collectionId; cannot key the bundle in the repository.", hostname: hostname);
 
-        var hostSegment = SanitizeSegment(string.IsNullOrWhiteSpace(hostname) ? "unknown-host" : hostname!);
-        var idSegment = SanitizeSegment(collectionId!);
+        var hostSegment = BundleLayout.SanitizeSegment(string.IsNullOrWhiteSpace(hostname) ? "unknown-host" : hostname!);
+        var idSegment = BundleLayout.SanitizeSegment(collectionId!);
         var destFinal = Path.Combine(_repositoryRoot, hostSegment, idSegment);
 
         // Idempotent: a previously published, still-verifiable copy means there is nothing to do.
@@ -139,56 +137,6 @@ public sealed class FileSystemArtifactSink : IArtifactSink
             ? result.Issues
             : new[] { $"{subject} integrity status: {result.Status}." };
 
-    private static string? ResolveBundleDirectory(string path)
-    {
-        var dir = Path.GetFullPath(path);
-        if (!Directory.Exists(dir))
-            return null;
-
-        if (File.Exists(Path.Combine(dir, "timeline.json")))
-            return dir;
-
-        try
-        {
-            foreach (var sub in Directory.GetDirectories(dir, "snapshot_*").OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
-            {
-                if (File.Exists(Path.Combine(sub, "timeline.json")))
-                    return sub;
-            }
-        }
-        catch
-        {
-            return null;
-        }
-
-        return null;
-    }
-
-    private static async Task<(string? collectionId, string? hostname)> ReadBundleIdentityAsync(
-        string bundleDir, CancellationToken cancellationToken)
-    {
-        var manifestPath = Path.Combine(bundleDir, "manifest.json");
-        if (!File.Exists(manifestPath))
-            return (null, null);
-
-        await using var stream = File.OpenRead(manifestPath);
-        using var doc = await JsonDocument.ParseAsync(stream, default, cancellationToken);
-        var root = doc.RootElement;
-
-        var collectionId = root.TryGetProperty("collectionId", out var cid) && cid.ValueKind == JsonValueKind.String
-            ? cid.GetString()
-            : null;
-
-        string? hostname = null;
-        if (root.TryGetProperty("host", out var host) && host.ValueKind == JsonValueKind.Object
-            && host.TryGetProperty("hostname", out var hn) && hn.ValueKind == JsonValueKind.String)
-        {
-            hostname = hn.GetString();
-        }
-
-        return (collectionId, hostname);
-    }
-
     private static async Task<bool> FilesEqualAsync(string a, string b, CancellationToken cancellationToken)
     {
         var infoA = new FileInfo(a);
@@ -196,29 +144,8 @@ public sealed class FileSystemArtifactSink : IArtifactSink
         if (!infoB.Exists || infoA.Length != infoB.Length)
             return false;
 
-        var hashA = await Sha256Async(a, cancellationToken);
-        var hashB = await Sha256Async(b, cancellationToken);
+        var hashA = await BundleLayout.Sha256Async(a, cancellationToken);
+        var hashB = await BundleLayout.Sha256Async(b, cancellationToken);
         return string.Equals(hashA, hashB, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static async Task<string> Sha256Async(string filePath, CancellationToken cancellationToken)
-    {
-        using var sha256 = SHA256.Create();
-        await using var stream = File.OpenRead(filePath);
-        var hashBytes = await sha256.ComputeHashAsync(stream, cancellationToken);
-        return Convert.ToHexString(hashBytes).ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// Makes a manifest-derived value safe to use as a single path segment: invalid filename characters
-    /// (including the path separators on Windows) become '_', and leading/trailing dots are stripped so a
-    /// hostile or malformed value can never become "." / ".." or escape the repository root.
-    /// </summary>
-    private static string SanitizeSegment(string value)
-    {
-        var invalid = Path.GetInvalidFileNameChars();
-        var chars = value.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
-        var cleaned = new string(chars).Trim().Trim('.').Trim();
-        return string.IsNullOrEmpty(cleaned) ? "_" : cleaned;
     }
 }
