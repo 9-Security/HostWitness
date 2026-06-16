@@ -82,60 +82,74 @@ public sealed class HttpArtifactSink : IArtifactSink
             };
         }
 
-        // 2. Upload every file the server does not already hold with a matching hash.
-        var files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
-        var filesCopied = 0;
-        var filesSkipped = 0;
-        long bytesCopied = 0;
-
-        for (var i = 0; i < files.Length; i++)
+        // 2/3. Upload the files the server lacks, then complete. Server-side rejections and transport errors
+        // (4xx/5xx, dropped connection) are an expected failure mode for a sink, so they surface as a Failed
+        // result rather than an unhandled throw — matching the filesystem sink's contract. Cancellation still
+        // propagates as OperationCanceledException.
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var src = files[i];
-            var relative = BundleLayout.RelativeKey(sourceDir, src);
-            var sha = await BundleLayout.Sha256Async(src, cancellationToken);
+            var files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
+            var filesCopied = 0;
+            var filesSkipped = 0;
+            long bytesCopied = 0;
 
-            progress?.Report(new BundlePublishProgress
+            for (var i = 0; i < files.Length; i++)
             {
-                CurrentFile = relative,
-                FilesProcessed = i,
-                TotalFiles = files.Length
-            });
+                cancellationToken.ThrowIfCancellationRequested();
+                var src = files[i];
+                var relative = BundleLayout.RelativeKey(sourceDir, src);
+                var sha = await BundleLayout.Sha256Async(src, cancellationToken);
 
-            if (status.StagedFiles.TryGetValue(relative, out var stagedSha)
-                && string.Equals(stagedSha, sha, StringComparison.OrdinalIgnoreCase))
-            {
-                filesSkipped++;
-                continue;
+                progress?.Report(new BundlePublishProgress
+                {
+                    CurrentFile = relative,
+                    FilesProcessed = i,
+                    TotalFiles = files.Length
+                });
+
+                if (status.StagedFiles.TryGetValue(relative, out var stagedSha)
+                    && string.Equals(stagedSha, sha, StringComparison.OrdinalIgnoreCase))
+                {
+                    filesSkipped++;
+                    continue;
+                }
+
+                await UploadFileAsync(collectionId!, relative, sha, src, cancellationToken);
+                filesCopied++;
+                bytesCopied += new FileInfo(src).Length;
             }
 
-            await UploadFileAsync(collectionId!, relative, sha, src, cancellationToken);
-            filesCopied++;
-            bytesCopied += new FileInfo(src).Length;
+            var complete = await CompleteAsync(collectionId!, cancellationToken);
+            if (!Enum.TryParse<BundlePublishStatus>(complete.Status, out var finalStatus))
+                finalStatus = BundlePublishStatus.Failed;
+
+            if (finalStatus == BundlePublishStatus.Failed)
+            {
+                return BundlePublishResult.Fail(
+                    complete.Issues.Count > 0 ? complete.Issues : new[] { "Intake server reported publish failure." },
+                    collectionId, hostname);
+            }
+
+            return new BundlePublishResult
+            {
+                Status = finalStatus,
+                DestinationPath = complete.DestinationPath,
+                CollectionId = collectionId,
+                Hostname = hostname,
+                FilesCopied = filesCopied,
+                FilesSkipped = filesSkipped,
+                BytesCopied = bytesCopied
+            };
         }
-
-        // 3. Complete: the server verifies the assembled set and finalizes it into the repository.
-        var complete = await CompleteAsync(collectionId!, cancellationToken);
-        if (!Enum.TryParse<BundlePublishStatus>(complete.Status, out var finalStatus))
-            finalStatus = BundlePublishStatus.Failed;
-
-        if (finalStatus == BundlePublishStatus.Failed)
+        catch (IntakeUnauthorizedException)
         {
             return BundlePublishResult.Fail(
-                complete.Issues.Count > 0 ? complete.Issues : new[] { "Intake server reported publish failure." },
-                collectionId, hostname);
+                "Intake rejected the credentials (HTTP 401). Check the configured intake token.", collectionId, hostname);
         }
-
-        return new BundlePublishResult
+        catch (HttpRequestException ex)
         {
-            Status = finalStatus,
-            DestinationPath = complete.DestinationPath,
-            CollectionId = collectionId,
-            Hostname = hostname,
-            FilesCopied = filesCopied,
-            FilesSkipped = filesSkipped,
-            BytesCopied = bytesCopied
-        };
+            return BundlePublishResult.Fail($"Intake transfer failed: {ex.Message}", collectionId, hostname);
+        }
     }
 
     private async Task<BundleStatusResponse> GetStatusAsync(string collectionId, CancellationToken cancellationToken)
@@ -169,6 +183,8 @@ public sealed class HttpArtifactSink : IArtifactSink
         AddAuth(request);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new IntakeUnauthorizedException();
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"Intake rejected file '{relative}' (HTTP {(int)response.StatusCode}).");
     }
@@ -182,6 +198,8 @@ public sealed class HttpArtifactSink : IArtifactSink
         AddAuth(request);
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new IntakeUnauthorizedException();
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<BundleCompleteResponse>(HttpIntakeContract.Json, cancellationToken)
                ?? new BundleCompleteResponse { Issues = { "Intake returned an empty completion response." } };

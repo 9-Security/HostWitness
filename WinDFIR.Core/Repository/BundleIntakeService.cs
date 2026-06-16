@@ -69,25 +69,33 @@ public sealed class BundleIntakeService
         if (!BundleLayout.IsWithinDirectory(dest, stagingDir))
             return false;
 
-        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        // Receive into a uniquely-named temp file in a separate scratch dir (never inside the bundle staging
+        // dir), verify the hash, then atomically move it into place. Because temps live outside staging, an
+        // interrupted, cancelled, or hash-mismatched upload can never leave an orphan that the integrity gate's
+        // "undeclared file" check would later reject — only verified, complete files ever land in staging.
+        var scratchDir = Path.Combine(_intakeWork, ".tmp");
+        Directory.CreateDirectory(scratchDir);
+        var temp = Path.Combine(scratchDir, Guid.NewGuid().ToString("N") + ".part");
 
-        // Write to a temp sibling and verify the hash before publishing the name, so a partial/corrupt upload
-        // never leaves a file that a later resume would mistake for already-received-and-intact.
-        var temp = dest + ".uploading";
-        await using (var fs = File.Create(temp))
+        try
         {
-            await content.CopyToAsync(fs, cancellationToken);
-        }
+            await using (var fs = File.Create(temp))
+            {
+                await content.CopyToAsync(fs, cancellationToken);
+            }
 
-        var actual = await BundleLayout.Sha256Async(temp, cancellationToken);
-        if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
+            var actual = await BundleLayout.Sha256Async(temp, cancellationToken);
+            if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Move(temp, dest, overwrite: true);
+            return true;
+        }
+        finally
         {
-            TryDeleteFile(temp);
-            return false;
+            TryDeleteFile(temp); // no-op once moved into place; cleans up on mismatch/cancellation/error
         }
-
-        File.Move(temp, dest, overwrite: true);
-        return true;
     }
 
     /// <summary>Finalizes the staged set into the repository (integrity-gated) and clears staging on success.</summary>

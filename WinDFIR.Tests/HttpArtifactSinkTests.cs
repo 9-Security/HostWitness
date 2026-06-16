@@ -185,6 +185,39 @@ public sealed class HttpArtifactSinkTests : IDisposable
     }
 
     [Fact]
+    public async Task Publish_ReturnsFailed_NotThrows_WhenServerErrorsOnComplete()
+    {
+        var collectionId = Guid.NewGuid().ToString("D");
+        var bundle = await CreateBundleAsync("c1", collectionId);
+        using var http = new HttpClient(new CompleteErrorHandler()) { BaseAddress = new Uri("http://intake.test/") };
+        var sink = new HttpArtifactSink(http, "http://intake.test/");
+
+        var result = await sink.PublishBundleAsync(bundle); // must not throw
+
+        Assert.Equal(BundlePublishStatus.Failed, result.Status);
+        Assert.NotEmpty(result.Issues);
+    }
+
+    [Fact]
+    public async Task ReceiveFile_LeavesNoOrphan_OnHashMismatch()
+    {
+        var repoRoot = Path.Combine(_workDir, "repo");
+        var service = new BundleIntakeService(repoRoot);
+        var bytes = Encoding.UTF8.GetBytes("payload");
+
+        await using (var ms = new MemoryStream(bytes))
+            Assert.False(await service.ReceiveFileAsync("id", "raw/x.bin", "deadbeef", ms));
+
+        // Nothing landed in the per-collection staging dir...
+        var stagingDir = Path.Combine(repoRoot, ".intake", "id");
+        Assert.True(!Directory.Exists(stagingDir)
+            || !Directory.EnumerateFiles(stagingDir, "*", SearchOption.AllDirectories).Any());
+        // ...and the scratch temp was cleaned up.
+        var scratch = Path.Combine(repoRoot, ".intake", ".tmp");
+        Assert.True(!Directory.Exists(scratch) || !Directory.EnumerateFiles(scratch).Any());
+    }
+
+    [Fact]
     public async Task Complete_Fails_WhenStagedSetIsIncomplete()
     {
         var collectionId = Guid.NewGuid().ToString("D");
@@ -314,6 +347,38 @@ public sealed class HttpArtifactSinkTests : IDisposable
             ManifestExtras = new Dictionary<string, object?> { ["collectionId"] = collectionId }
         };
         return await exporter.ExportAsync(index, outDir, options);
+    }
+
+    /// <summary>Serves valid status/file responses but a 500 on complete, to prove the client returns Failed (not throws).</summary>
+    private sealed class CompleteErrorHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            HttpResponseMessage response;
+            if (path.EndsWith("/status", StringComparison.Ordinal))
+            {
+                var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new BundleStatusResponse(), HttpIntakeContract.Json);
+                response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(bytes) { Headers = { ContentType = new("application/json") } }
+                };
+            }
+            else if (path.EndsWith("/files", StringComparison.Ordinal))
+            {
+                response = new HttpResponseMessage(HttpStatusCode.OK);
+            }
+            else if (path.EndsWith("/complete", StringComparison.Ordinal))
+            {
+                response = new HttpResponseMessage(HttpStatusCode.InternalServerError);
+            }
+            else
+            {
+                response = new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            return Task.FromResult(response);
+        }
     }
 
     /// <summary>
