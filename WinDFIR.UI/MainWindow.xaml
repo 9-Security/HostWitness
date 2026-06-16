@@ -51,6 +51,7 @@
                 <MenuItem Header="_Close Snapshot" Name="CloseSnapshotMenuItem" Click="CloseSnapshotMenuItem_Click" Visibility="Collapsed" ToolTip="Return timeline to live data — Ctrl+W"/>
                 <Separator/>
                 <MenuItem Header="_Export Snapshot" Click="ExportButton_Click" ToolTip="Export current index to Snapshot folder — Ctrl+E"/>
+                <MenuItem Header="_Publish to Case Repository..." Click="PublishToCaseRepositoryMenuItem_Click" ToolTip="Publish a completed snapshot bundle to a central case repository (shared folder / mounted bucket, or an http(s) intake server)"/>
                 <MenuItem Header="Export to _SQLite..." Click="ExportToSqliteMenuItem_Click" ToolTip="Export current timeline to a SQLite database for offline query"/>
                 <MenuItem Header="_Open from SQLite..." Click="OpenFromSqliteMenuItem_Click" ToolTip="Load timeline from a SQLite database (created by Export to SQLite)"/>
                 <MenuItem Header="Load Event Log (._evtx)..." Click="LoadEvtxMenuItem_Click" ToolTip="Parse one or more offline .evtx files (from a dead box, VSS copy, or another tool) into the current session"/>

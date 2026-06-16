@@ -14,6 +14,8 @@ using System.Threading;
 
 using System.Threading.Tasks;
 
+using System.Net.Http;
+
 using System.Windows;
 
 using System.Windows.Controls;
@@ -38,6 +40,8 @@ using WinDFIR.Core.Index;
 using WinDFIR.Core.Normalization;
 
 using WinDFIR.Core.Snapshot;
+
+using WinDFIR.Core.Repository;
 
 using WinDFIR.Core.Settings;
 
@@ -3371,6 +3375,69 @@ public partial class MainWindow : Window
         }
 
         return $"{size:0.##} {units[unitIndex]}";
+    }
+
+    private async void PublishToCaseRepositoryMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isLongOpRunning)
+            return;
+
+        // Pre-fill with the currently open snapshot's folder, if one is loaded.
+        var dialog = new PublishToCaseRepositoryDialog(_snapshotPath) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        _isLongOpRunning = true;
+        HttpClient? httpClient = null;
+        try
+        {
+            // A URL routes to the HTTP evidence intake; any other value is a filesystem path.
+            IArtifactSink sink;
+            var target = dialog.RepositoryTarget;
+            if (target.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || target.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                httpClient = new HttpClient();
+                sink = new HttpArtifactSink(httpClient, target, dialog.Token);
+            }
+            else
+            {
+                sink = new FileSystemArtifactSink(target);
+            }
+
+            Mouse.OverrideCursor = Cursors.Wait;
+            var result = await Task.Run(() => sink.PublishBundleAsync(dialog.BundleFolder)).ConfigureAwait(true);
+            Mouse.OverrideCursor = null;
+
+            switch (result.Status)
+            {
+                case BundlePublishStatus.Published:
+                    MessageBox.Show(
+                        $"Published to:\n{result.DestinationPath}\n\n{result.FilesCopied} file(s) copied, {result.FilesSkipped} already present.",
+                        "Publish Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;
+                case BundlePublishStatus.AlreadyPresent:
+                    MessageBox.Show(
+                        $"This collection is already present in the repository; nothing to do.\n\ncollectionId: {result.CollectionId}",
+                        "Publish Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;
+                default:
+                    MessageBox.Show(
+                        "Publish failed:\n\n" + string.Join("\n", result.Issues),
+                        "Publish Snapshot", MessageBoxButton.OK, MessageBoxImage.Error);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Mouse.OverrideCursor = null;
+            MessageBox.Show("Publish failed:\n\n" + ex.Message, "Publish Snapshot", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            httpClient?.Dispose();
+            _isLongOpRunning = false;
+        }
     }
 
     private async void ExportButton_Click(object sender, RoutedEventArgs e)

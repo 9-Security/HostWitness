@@ -1,0 +1,42 @@
+<Window x:Class="WinDFIR.UI.Views.PublishToCaseRepositoryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Publish Snapshot to Case Repository"
+        Width="560" Height="330"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,12"
+                   Text="Publish a completed snapshot bundle into a central case repository so collections from multiple investigated hosts gather in one place. The bundle is integrity-checked before and after transfer; re-publishing the same collection is a no-op."/>
+
+        <DockPanel Grid.Row="1" Margin="0,0,0,8">
+            <TextBlock DockPanel.Dock="Top" Text="Snapshot bundle folder (contains timeline.json):" Margin="0,0,0,3"/>
+            <Button DockPanel.Dock="Right" Content="Browse..." Width="80" Margin="6,0,0,0" Click="Browse_Click"/>
+            <TextBox Name="BundleFolderBox" VerticalContentAlignment="Center"/>
+        </DockPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,8">
+            <TextBlock Text="Repository target (a folder / UNC share, or an http(s):// intake URL):" Margin="0,0,0,3"/>
+            <TextBox Name="RepositoryBox" VerticalContentAlignment="Center"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Margin="0,0,0,8">
+            <TextBlock Text="Intake token (optional; only for an authenticated HTTP intake):" Margin="0,0,0,3"/>
+            <PasswordBox Name="TokenBox" VerticalContentAlignment="Center"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Publish" IsDefault="True" Click="Ok_Click" Width="90" Margin="0,0,8,0"/>
+            <Button Content="Cancel" IsCancel="True" Width="80"/>
+        </StackPanel>
+    </Grid>
+</Window>
