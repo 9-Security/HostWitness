@@ -52,4 +52,8 @@ The case repository improves **gathering and integrity**, not collection coverag
 Get-FileHash .\HostWitness.exe -Algorithm SHA256
 ```
 
-(Compare against the SHA256 published with this release.)
+Expected SHA256 for this release's `Release\HostWitness.exe` (win-x64, self-contained single file):
+
+```
+A84B07AB22BE09ABEF08ABD54CE28C2A412701DF2AEC711593E774B9079BE595
+```
