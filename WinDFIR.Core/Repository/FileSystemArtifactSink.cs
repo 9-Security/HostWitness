@@ -53,6 +53,11 @@ public sealed class FileSystemArtifactSink : IArtifactSink
         var idSegment = BundleLayout.SanitizeSegment(collectionId!);
         var destFinal = Path.Combine(_repositoryRoot, hostSegment, idSegment);
 
+        // Serialize everything that touches this destination's staging dir and final name, so two concurrent
+        // publishes of the same collection (overlapping retries, intake server handling duplicate uploads)
+        // cannot corrupt the shared ".partial" dir or race on the delete-then-rename finalize.
+        using var _ = await KeyedAsyncLock.AcquireAsync(destFinal, cancellationToken);
+
         // Idempotent: a previously published, still-verifiable copy means there is nothing to do.
         if (Directory.Exists(destFinal))
         {

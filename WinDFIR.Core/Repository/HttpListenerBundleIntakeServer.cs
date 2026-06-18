@@ -7,8 +7,11 @@ namespace WinDFIR.Core.Repository;
 /// <summary>
 /// A minimal, dependency-free HTTP front for <see cref="BundleIntakeService"/> built on <see cref="HttpListener"/>.
 /// It hosts the <see cref="HttpIntakeContract"/> endpoints so a <see cref="HttpArtifactSink"/> on an investigated
-/// host can deliver its bundle to a central case repository. Intended for a small, operator-run intake host;
-/// terminate TLS and add authentication at a reverse proxy (or extend this) before exposing beyond a trusted LAN.
+/// host can deliver its bundle to a central case repository. Intended for a small, operator-run intake host.
+///
+/// Pass an https:// prefix to serve over TLS (the certificate is bound to the port out-of-band via
+/// "netsh http add sslcert"; no code change). Without TLS the bearer token travels in plaintext, so use a
+/// reverse proxy or a trusted LAN. Full deployment steps (URL ACL, sslcert, auth): docs/CaseRepositoryIntake說明.md.
 /// </summary>
 public sealed class HttpListenerBundleIntakeServer : IDisposable
 {

@@ -78,6 +78,31 @@ public sealed class FileSystemArtifactSinkTests : IDisposable
     }
 
     [Fact]
+    public async Task Publish_ConcurrentSameBundle_SerializesWithoutCorruption()
+    {
+        var collectionId = Guid.NewGuid().ToString("D");
+        var bundle = await CreateBundleAsync("c1", collectionId);
+        var repoRoot = Path.Combine(_workDir, "repo");
+        var sink = new FileSystemArtifactSink(repoRoot);
+
+        // Two overlapping publishes of the same collection must be serialized by the keyed lock.
+        var results = await Task.WhenAll(sink.PublishBundleAsync(bundle), sink.PublishBundleAsync(bundle));
+
+        Assert.All(results, r => Assert.True(r.IsSuccess, string.Join("; ", r.Issues)));
+        Assert.Contains(results, r => r.Status == BundlePublishStatus.Published);
+        Assert.Contains(results, r => r.Status == BundlePublishStatus.AlreadyPresent);
+
+        var dest = Path.Combine(repoRoot, Environment.MachineName, collectionId);
+        var verify = await SnapshotIntegrityVerifier.VerifyFolderAsync(dest);
+        Assert.Equal(SnapshotIntegrityStatus.Verified, verify.Status);
+
+        // One finalized collection dir, no leftover .partial.
+        var hostDir = Path.Combine(repoRoot, Environment.MachineName);
+        Assert.Single(Directory.GetDirectories(hostDir));
+        Assert.Empty(Directory.GetDirectories(hostDir, "*.partial"));
+    }
+
+    [Fact]
     public async Task Publish_Resumes_WhenStagingAlreadyHasSomeFiles()
     {
         var collectionId = Guid.NewGuid().ToString("D");
