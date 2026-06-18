@@ -88,8 +88,14 @@ public sealed class BundleIntakeService
             if (!string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.Move(temp, dest, overwrite: true);
+            // Serialize the move-into-staging against CompleteAsync (same key) so a late file cannot land in
+            // staging midway through finalize — which would either trip the integrity gate's "undeclared file"
+            // check or be silently discarded when CompleteAsync deletes staging on success.
+            using (await KeyedAsyncLock.AcquireAsync(stagingDir, cancellationToken))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Move(temp, dest, overwrite: true);
+            }
             return true;
         }
         finally
@@ -107,8 +113,17 @@ public sealed class BundleIntakeService
         if (!Directory.Exists(stagingDir))
             return new BundleCompleteResponse { Issues = { "No staged files were received for this collection." } };
 
-        var result = await _sink.PublishBundleAsync(stagingDir, null, cancellationToken);
-        var response = new BundleCompleteResponse
+        // Hold the staging key across publish + cleanup so a concurrent ReceiveFileAsync (same key) cannot
+        // mutate staging mid-finalize. The sink locks on its own destination key, not this one, so no deadlock.
+        BundlePublishResult result;
+        using (await KeyedAsyncLock.AcquireAsync(stagingDir, cancellationToken))
+        {
+            result = await _sink.PublishBundleAsync(stagingDir, null, cancellationToken);
+            if (result.IsSuccess)
+                TryDeleteDirectory(stagingDir);
+        }
+
+        return new BundleCompleteResponse
         {
             Status = result.Status.ToString(),
             DestinationPath = result.DestinationPath,
@@ -116,11 +131,6 @@ public sealed class BundleIntakeService
             Hostname = result.Hostname,
             Issues = result.Issues.ToList()
         };
-
-        if (result.IsSuccess)
-            TryDeleteDirectory(stagingDir);
-
-        return response;
     }
 
     private string StagingDir(string sanitizedId) => Path.Combine(_intakeWork, sanitizedId);

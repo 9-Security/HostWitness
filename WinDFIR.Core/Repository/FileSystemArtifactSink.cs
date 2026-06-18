@@ -114,6 +114,20 @@ public sealed class FileSystemArtifactSink : IArtifactSink
             bytesCopied += new FileInfo(src).Length;
         }
 
+        // A stale .partial from an earlier interrupted run (or external interference) can hold files no longer
+        // in the source bundle. They are absent from hashes.txt, so Gate 2's reverse "undeclared file" check
+        // would fail every retry forever — a poisoned, non-resumable staging dir. Prune anything the source
+        // lacks so a retry self-heals instead of wedging.
+        var expectedStaged = new HashSet<string>(
+            sourceFiles.Select(s => Path.GetFullPath(Path.Combine(staging, Path.GetRelativePath(sourceDir, s)))),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var stagedFile in Directory.GetFiles(staging, "*", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!expectedStaged.Contains(Path.GetFullPath(stagedFile)))
+                File.Delete(stagedFile);
+        }
+
         // Gate 2: prove the staged copy is itself a complete, intact bundle before exposing it under the
         // final name. On failure we deliberately leave staging in place so a retry resumes, not restarts.
         var stagedIntegrity = await SnapshotIntegrityVerifier.VerifyFolderAsync(staging, cancellationToken);

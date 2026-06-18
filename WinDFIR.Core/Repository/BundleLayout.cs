@@ -10,7 +10,11 @@ namespace WinDFIR.Core.Repository;
 /// </summary>
 internal static class BundleLayout
 {
-    /// <summary>Resolves a bundle directory: the path itself if it holds timeline.json, else a single snapshot_* child.</summary>
+    /// <summary>
+    /// Resolves a bundle directory: the path itself if it holds timeline.json, else the most recent snapshot_*
+    /// child that does (names are snapshot_yyyyMMdd_HHmmss, so descending order = newest first). Picking the
+    /// newest avoids silently publishing a stale earlier export when the parent accumulated several.
+    /// </summary>
     public static string? ResolveBundleDirectory(string path)
     {
         var dir = Path.GetFullPath(path);
@@ -22,7 +26,7 @@ internal static class BundleLayout
 
         try
         {
-            foreach (var sub in Directory.GetDirectories(dir, "snapshot_*").OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+            foreach (var sub in Directory.GetDirectories(dir, "snapshot_*").OrderByDescending(s => s, StringComparer.OrdinalIgnoreCase))
             {
                 if (File.Exists(Path.Combine(sub, "timeline.json")))
                     return sub;
@@ -86,8 +90,25 @@ internal static class BundleLayout
         var invalid = Path.GetInvalidFileNameChars();
         var chars = value.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
         var cleaned = new string(chars).Trim().Trim('.').Trim();
-        return string.IsNullOrEmpty(cleaned) ? "_" : cleaned;
+        if (string.IsNullOrEmpty(cleaned))
+            return "_";
+
+        // A Windows reserved device name (CON, NUL, COM1...) is illegal as a path segment even with an
+        // extension, and would make Directory.Create/Move throw — wedging that host/collection. A hostile or
+        // unlucky manifest value could land on one, so neutralize it with a prefix.
+        var baseName = cleaned.Split('.', 2)[0];
+        if (ReservedDeviceNames.Contains(baseName))
+            return "_" + cleaned;
+
+        return cleaned;
     }
+
+    private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    };
 
     /// <summary>True if <paramref name="path"/> resolves to a location inside <paramref name="directory"/>.</summary>
     public static bool IsWithinDirectory(string path, string directory)

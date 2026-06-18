@@ -3391,19 +3391,9 @@ public partial class MainWindow : Window
         HttpClient? httpClient = null;
         try
         {
-            // A URL routes to the HTTP evidence intake; any other value is a filesystem path.
-            IArtifactSink sink;
-            var target = dialog.RepositoryTarget;
-            if (target.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                || target.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                httpClient = new HttpClient();
-                sink = new HttpArtifactSink(httpClient, target, dialog.Token);
-            }
-            else
-            {
-                sink = new FileSystemArtifactSink(target);
-            }
+            // A URL routes to the HTTP evidence intake; any other value is a filesystem path. The factory owns
+            // the rule (shared with the Agent CLI); httpClient is non-null only for an HTTP target.
+            var sink = ArtifactSinkFactory.Create(dialog.RepositoryTarget, dialog.Token, out httpClient);
 
             Mouse.OverrideCursor = Cursors.Wait;
             var result = await Task.Run(() => sink.PublishBundleAsync(dialog.BundleFolder)).ConfigureAwait(true);

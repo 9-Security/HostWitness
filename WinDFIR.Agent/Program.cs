@@ -142,19 +142,9 @@ internal static class Program
             HttpClient? httpClient = null;
             try
             {
-                // A URL routes to the HTTP evidence intake; any other value is a filesystem path
-                // (local dir, UNC share, or mounted bucket). Both honor the same IArtifactSink contract.
-                IArtifactSink sink;
-                if (repoPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-                    || repoPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                {
-                    httpClient = new HttpClient();
-                    sink = new HttpArtifactSink(httpClient, repoPath, repoToken);
-                }
-                else
-                {
-                    sink = new FileSystemArtifactSink(repoPath);
-                }
+                // A URL routes to the HTTP evidence intake; any other value is a filesystem path (local dir,
+                // UNC share, or mounted bucket). The factory owns the rule; httpClient is non-null only for HTTP.
+                var sink = ArtifactSinkFactory.Create(repoPath, repoToken, out httpClient);
 
                 Console.WriteLine($"Publishing bundle to {sink.Describe()}...");
                 var result = await sink.PublishBundleAsync(bundlePath);

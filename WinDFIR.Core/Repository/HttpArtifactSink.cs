@@ -60,34 +60,26 @@ public sealed class HttpArtifactSink : IArtifactSink
             return BundlePublishResult.Fail(
                 "manifest.json has no collectionId; cannot key the bundle in the repository.", hostname: hostname);
 
-        // 1. Status: short-circuit if already present, otherwise learn what is already staged (resume).
-        BundleStatusResponse status;
+        // Status, uploads, and finalize all talk to the intake. Server-side rejections and transport errors
+        // (4xx/5xx, dropped connection, request timeout) are an expected failure mode for a sink, so they
+        // surface as a Failed result rather than an unhandled throw — matching the filesystem sink's contract.
+        // Caller-requested cancellation (cancellationToken) still propagates as OperationCanceledException.
         try
         {
-            status = await GetStatusAsync(collectionId!, cancellationToken);
-        }
-        catch (IntakeUnauthorizedException)
-        {
-            return BundlePublishResult.Fail(
-                "Intake rejected the credentials (HTTP 401). Check the configured intake token.", collectionId, hostname);
-        }
-        if (status.Complete)
-        {
-            return new BundlePublishResult
+            // 1. Status: short-circuit if already present, otherwise learn what is already staged (resume).
+            var status = await GetStatusAsync(collectionId!, cancellationToken);
+            if (status.Complete)
             {
-                Status = BundlePublishStatus.AlreadyPresent,
-                DestinationPath = status.DestinationPath,
-                CollectionId = collectionId,
-                Hostname = hostname
-            };
-        }
+                return new BundlePublishResult
+                {
+                    Status = BundlePublishStatus.AlreadyPresent,
+                    DestinationPath = status.DestinationPath,
+                    CollectionId = collectionId,
+                    Hostname = hostname
+                };
+            }
 
-        // 2/3. Upload the files the server lacks, then complete. Server-side rejections and transport errors
-        // (4xx/5xx, dropped connection) are an expected failure mode for a sink, so they surface as a Failed
-        // result rather than an unhandled throw — matching the filesystem sink's contract. Cancellation still
-        // propagates as OperationCanceledException.
-        try
-        {
+            // 2/3. Upload the files the server lacks, then complete.
             var files = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
             var filesCopied = 0;
             var filesSkipped = 0;
@@ -150,6 +142,15 @@ public sealed class HttpArtifactSink : IArtifactSink
         {
             return BundlePublishResult.Fail($"Intake transfer failed: {ex.Message}", collectionId, hostname);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // An OperationCanceledException (incl. TaskCanceledException) raised while the caller's token is
+            // NOT signalled is an HttpClient request timeout, not a user cancel. Surface it as a transport
+            // failure so the documented "errors -> Failed, not throw" contract holds for large/slow bundles.
+            return BundlePublishResult.Fail(
+                "Intake transfer timed out. Increase the HttpClient timeout for large bundles, or check connectivity.",
+                collectionId, hostname);
+        }
     }
 
     private async Task<BundleStatusResponse> GetStatusAsync(string collectionId, CancellationToken cancellationToken)
@@ -164,8 +165,12 @@ public sealed class HttpArtifactSink : IArtifactSink
             throw new IntakeUnauthorizedException();
 
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<BundleStatusResponse>(HttpIntakeContract.Json, cancellationToken)
+        var status = await response.Content.ReadFromJsonAsync<BundleStatusResponse>(HttpIntakeContract.Json, cancellationToken)
                ?? new BundleStatusResponse();
+        // A body with an explicit "stagedFiles": null overwrites the property initializer with null; guard so the
+        // resume loop's StagedFiles.TryGetValue cannot NRE (which would escape the catch blocks as an unhandled throw).
+        status.StagedFiles ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return status;
     }
 
     private sealed class IntakeUnauthorizedException : Exception;
