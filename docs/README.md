@@ -18,6 +18,8 @@
 - **ARCHITECTURE.md** — 架構概覽
 - **TECH_DEBT.md** — 技術債與過渡計畫（Registry、UI 解耦、Index 持久化、Docking）；§3 含 **Index 完整持久化決策框架**（開工前目標／canonical store／版本與 migration）；開頭「**中長期排程**」為優先順序與建議處理方式
 - **開發者說明.md** — 架構概觀、新增 View/ViewModel 與分頁步驟、Provider 註冊
+- **建置與發布.md** — 維護者：建置/發布指令、發布前檢查清單、manifest 欄位、程式碼簽章流程
+- **變更摘要.md** — 功能摘要與文件更新歷程（自 README 移入）
 - **穩定版路線圖.md** — 穩定版成熟度強化的階段、交付物與 release gate
 - **穩定版邊界定義.md** — 目前 stable baseline 的平台、模式、輸出與 high-risk 功能邊界
 - **StableReleaseVerificationMatrix.md** - manual verification matrix and release gate criteria for the current UI/Core stable scope
