@@ -1,5 +1,7 @@
 # HostWitness 說明文件
 
+> 🏠 回到專案首頁：[English README](../README.md) · [中文 README](../README.zh-TW.md)
+
 本目錄集中存放專案相關說明與記錄；根目錄以 README、規格書、發布腳本與正式輸出為主。
 
 > **注意**：過時說明已整併至 `待修復問題記錄.md`；原歷史修復記錄（old_docs）已移除以精簡目錄，可自版控歷史還原。
