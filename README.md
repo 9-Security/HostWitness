@@ -1,5 +1,8 @@
 # HostWitness - Windows Live Forensics & Activity Correlation Tool
 
+Open-source Windows live-forensics and activity-correlation tool, maintained by **nine-security Inc.** (author: Shar).
+Source: <https://github.com/9-Security/HostWitness> · Licensed under **Apache-2.0** (see [`LICENSE`](LICENSE)).
+
 ## 下載後：SmartScreen 警告與檔案驗證
 
 > 這一段是給**下載發行版的人**看的。若你是自行建置，請見下方〈編譯與執行〉。
