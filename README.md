@@ -1,5 +1,43 @@
 # HostWitness - Windows Live Forensics & Activity Correlation Tool
 
+## 下載後：SmartScreen 警告與檔案驗證
+
+> 這一段是給**下載發行版的人**看的。若你是自行建置，請見下方〈編譯與執行〉。
+
+### 為什麼會跳出「Windows 已保護您的電腦」（SmartScreen）
+
+HostWitness 是**開源的單機取證工具**，目前**未採用 EV 程式碼簽章憑證**。Windows SmartScreen 會對「下載量低／發行者信譽尚未建立」的程式顯示警告——**這是預期行為，不代表檔案損毀或含惡意程式**。取證工具因為會讀取原始磁碟（`\\.\PhysicalDrive0`）、dump 行程記憶體、操作特權，比一般程式**更容易**被 SmartScreen 或防毒軟體標記。
+
+要繼續執行：
+
+1. **先用下方 SHA256 驗證檔案**，確認你下載到的就是官方發行版本（這比點掉警告更重要）。
+2. 驗證通過後，在 SmartScreen 畫面點 **「其他資訊」→「仍要執行」**；
+   或在檔案上按右鍵 → **內容** → 勾選 **解除封鎖（Unblock）** → 確定。
+
+> 不想看到此警告、且想以你自己的名義簽章，最便宜的公開路線是 **Certum 開源程式碼簽章憑證（約 US$50/年，雲端簽章免實體 token）**；唯有 **EV 憑證（約 US$249/年）** 能立即通過 SmartScreen。在累積足夠下載信譽前，OV 等級憑證仍會跳警告。
+
+### 用 SHA256 驗證檔案完整性
+
+下載後、執行前，用 PowerShell 計算雜湊：
+
+```powershell
+Get-FileHash .\HostWitness.exe -Algorithm SHA256
+```
+
+把輸出的 `Hash` 值與**該版本發行說明**中公布的 SHA256 比對（每個版本記錄於 `docs\RELEASE_NOTES_<版本>.md`，例如 1.3.0 見 `docs\RELEASE_NOTES_1.3.0.md` 的〈Verifying the download〉；GitHub Release 頁的資產說明亦會附同一雜湊）。
+
+一行自動比對（把 `<EXPECTED_SHA256>` 換成公布值）：
+
+```powershell
+if ((Get-FileHash .\HostWitness.exe -Algorithm SHA256).Hash -eq '<EXPECTED_SHA256>') { 'OK：雜湊相符' } else { '警告：雜湊不符，請勿執行' }
+```
+
+雜湊**不相符**代表檔案在傳輸中損毀、或不是官方發行版本——**請勿執行**，重新自官方來源下載。
+
+### 最高信任：自行從原始碼建置
+
+不信任任何預編譯的二進位檔時，最可靠的做法是自行建置：clone 本倉庫後執行 `cmd.exe /d /c .\publish.cmd`，產出 `Release\HostWitness.exe`（self-contained 單檔，詳見下方〈編譯與執行〉）。本專案開源即為此——程式碼可稽核、建置可重現。
+
 ## 編譯與執行
 
 - **發布腳本**：在專案目錄執行 **`publish.cmd`**（由 **cmd.exe** 呼叫 `dotnet`，官方唯一支援的一鍵發布路徑）：`dotnet restore` → build → **單元測試** → **publish**；預設產出 **`Release\HostWitness.exe` 單一檔案** (**self-contained** + **win-x64**)。`publish.ps1` 已停用，請改用 `publish.cmd`。

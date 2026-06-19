@@ -34,6 +34,8 @@ These checks **raise the adversary's cost and catch common hiding — they are n
 
 ## Verifying the download
 
+See [`VERIFY_AND_SMARTSCREEN.md`](VERIFY_AND_SMARTSCREEN.md) for the full SmartScreen and integrity-verification guide.
+
 ```
 Get-FileHash .\HostWitness.exe -Algorithm SHA256
 ```

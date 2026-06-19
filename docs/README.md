@@ -10,6 +10,7 @@
 - **待修復問題記錄.md** — 已知問題與後續修復方向
 - **專案進度與目錄說明.md** — 專案進度摘要與目錄結構（含已移除冗餘項目）
 - **LIMITATIONS.md** — 取證限制與即時採集風險說明
+- **VERIFY_AND_SMARTSCREEN.md** — (EN) 下載發行版後的 SmartScreen 警告處理與 SHA256 驗證
 - **EventLogView說明.md** — Event Log View 使用說明
 - **PrefetchView說明.md** — Prefetch View 使用說明
 - **AmcacheView說明.md** — Amcache View 使用說明

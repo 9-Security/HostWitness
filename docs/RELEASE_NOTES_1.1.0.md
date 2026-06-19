@@ -62,6 +62,8 @@ Loaded artifacts are tagged `Mode=Offline`, and the source file is bundled into 
 
 ## Verifying the download
 
+See [`VERIFY_AND_SMARTSCREEN.md`](VERIFY_AND_SMARTSCREEN.md) for the full SmartScreen and integrity-verification guide.
+
 ```
 Get-FileHash .\HostWitness.exe -Algorithm SHA256
 ```
