@@ -75,7 +75,6 @@ Paths refer to the **full project tree** (documentation and source). They are **
 |------|-----------|
 | Scope / agent | `README.md` (stable scope note) |
 | Limits | `docs/LIMITATIONS.md` |
-| Operator profile | `docs/StableOperatorProfileAndSOP.md` |
 | UI / modes | `WinDFIR.UI/MainWindow.xaml.cs` |
 | Event log | `WinDFIR.Providers/EventLogProvider.cs` |
 | Offline hive | `WinDFIR.Providers/OfflineHiveRegistryProvider.cs` |

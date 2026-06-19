@@ -1,4 +1,0 @@
-﻿interface:
-  display_name: "HostWitness Dev"
-  short_description: "Repo workflow for HostWitness maintenance"
-  default_prompt: "Use $hostwitness-dev to work safely in the HostWitness repo and follow its build, snapshot, release-gate, and doc-sync rules."

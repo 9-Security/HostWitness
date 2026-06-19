@@ -1,4 +1,0 @@
-﻿interface:
-  display_name: "HostWitness DFIR"
-  short_description: "Evidence analysis for HostWitness artifacts"
-  default_prompt: "Use $hostwitness-dfir to analyze HostWitness timelines, snapshots, and artifact views without over-claiming the evidence."

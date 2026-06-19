@@ -15,6 +15,10 @@ certs/
 *.user
 *.suo
 
+# Editor / AI-assistant local tooling (not for distribution)
+.cursor/
+codex-skills/
+
 # NuGet
 packages/
 *.nupkg

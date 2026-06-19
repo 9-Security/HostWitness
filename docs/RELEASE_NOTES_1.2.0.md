@@ -30,7 +30,7 @@ An item in the raw/second source but missing from the live view (`MissingFromLiv
 
 ## Honest bounds
 
-These checks **raise the adversary's cost and catch common hiding — they are not a guarantee.** The root limits of any user-mode live tool remain: a sufficiently privileged kernel (ring 0) or firmware/hypervisor (ring -1/-2) implant can lie to *both* the live API and, for the process check, the second API too; and running the tool itself perturbs system state. The process comparison in particular uses two user-mode APIs — true rootkit resistance would require raw memory / handle-table access, which this build does not do. Treat anomalies as leads to corroborate and as a signal to escalate to offline/memory forensics, not as proof. See `docs/LIMITATIONS.md` §26 and `docs/ASSESSMENT.md` (P6).
+These checks **raise the adversary's cost and catch common hiding — they are not a guarantee.** The root limits of any user-mode live tool remain: a sufficiently privileged kernel (ring 0) or firmware/hypervisor (ring -1/-2) implant can lie to *both* the live API and, for the process check, the second API too; and running the tool itself perturbs system state. The process comparison in particular uses two user-mode APIs — true rootkit resistance would require raw memory / handle-table access, which this build does not do. Treat anomalies as leads to corroborate and as a signal to escalate to offline/memory forensics, not as proof. See `docs/LIMITATIONS.md` §26.
 
 ## Verifying the download
 

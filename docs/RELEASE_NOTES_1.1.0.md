@@ -58,7 +58,7 @@ Loaded artifacts are tagged `Mode=Offline`, and the source file is bundled into 
 - **ESE databases are read read-only with recovery off** — a dirty-shutdown forensic copy can be parsed without its transaction logs and the evidence file is never modified. The ESE page size is a per-process global, so a single session cannot open two databases with different page sizes (e.g. `SRUDB.dat` and `qmgr.db`); this is surfaced as a clear message, not wrong data. Restart between them if needed.
 - **BITS and WMI are conservative string-level triage.** Their on-disk formats are undocumented/version-sensitive binary, so rather than guess struct offsets (which would risk fabricating fields) these extract the high-value readable strings — BITS download URLs/paths, WMI subscription filters/consumers/bindings. WMI does not decode a consumer's command-line/script payload; a recovered name/binding is a pivot, verify the full action with a dedicated CIM tool.
 - **SRUM/BITS/WMI are opt-in** (not part of default live collection) because they are high-volume or evidence-specific.
-- See `docs/LIMITATIONS.md` for the full per-artifact bounds, and `docs/ASSESSMENT.md` for an objective practical assessment.
+- See `docs/LIMITATIONS.md` for the full per-artifact bounds.
 
 ## Verifying the download
 

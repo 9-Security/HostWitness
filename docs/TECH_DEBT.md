@@ -1,6 +1,6 @@
 # 技術債與架構備忘 (Technical Debt)
 
-本文件集中記錄已知技術債、過渡方案與後續重構方向。與 `ARCHITECTURE.md` §7、`還有什麼要做的事項.md` 互補。
+本文件集中記錄已知技術債、過渡方案與後續重構方向。與 `ARCHITECTURE.md` §7 互補。
 
 **處理狀態摘要**：§1 Registry 中期已實作，Live 模式已標示為「非鑑識」；Live 啟用條件集中於 `RegistryLivePolicy`（見 §1）；P/Invoke 文件同步規則已收斂；UI 使用者觸發之 `Process.Start`／ShellExecute 已集中於 `ShellLaunchHelper`（見「中長期排程」優先 2）；§3 **完整持久化**僅文件化決策框架，**未**實作 canonical store／migration；§2 視圖與 Detach 註冊表已抽出為 ViewRegistryService，LiveTcp 分離工具列的 nullable / NRE 風險已於 2026-03-20 收斂；§3 Session 還原已實作；§4 已預留 ViewRegistryService 供未來 Docking 替換實作；§5 P/Invoke 已加註解與文件連結；`KeyGenerator` 舊 API 測試已降級為相容性測試並補上主路徑／Registry 回歸測試。**中長期工作優先順序**見下方專節（依風險、對 stable 邊界之影響、投資報酬排序）。
 
@@ -140,7 +140,7 @@
 
 **現狀**：RegistrySearchProvider 使用 `RegQueryInfoKey(SafeRegistryHandle)`，未使用 `DangerousGetHandle`；已於程式內加註解標明過渡方案並連結 `docs\TECH_DEBT.md` §5、`docs\LIMITATIONS.md` §2。鑑識優先使用 Offline Hive。**維護規則**與 §1「文件與實作同步」相同：P/Invoke 介面或 handle 用法有變時，程式註解與上述文件一併更新。
 
-**參考**：`docs\還有什麼要做的事項.md`、`docs\RegistrySearch說明.md`。與 Live Registry 相關之**產品決策優先序**見開頭「**中長期排程**」**優先 1**；**ShellExecute** 類 hardening 見**優先 2**。
+**參考**：`docs\RegistrySearch說明.md`。與 Live Registry 相關之**產品決策優先序**見開頭「**中長期排程**」**優先 1**；**ShellExecute** 類 hardening 見**優先 2**。
 
 ---
 

@@ -3,10 +3,9 @@ REM HostWitness release entrypoint (official). Runs dotnet via cmd.exe, not Powe
 REM Usage:
 REM   publish.cmd                      restore, build, test, publish to Release\, optional sign
 REM   publish.cmd -SkipPublish         restore, build, test only
-REM   publish.cmd -StableGate          run InvokeStableReleaseGate.ps1 first; then publish unless -SkipPublish
 REM   publish.cmd -Runtime win-arm64  target RID (default win-x64)
 REM   publish.cmd -FrameworkDependent  single-file but requires .NET 8 Desktop on target
-REM   publish.cmd -SkipTests           skip test step (for gate -SkipTests; default runs tests)
+REM   publish.cmd -SkipTests           skip test step (default runs tests)
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 if errorlevel 1 exit /b 1
@@ -17,13 +16,11 @@ set "RUNTIME=win-x64"
 set "FW_DEP=0"
 set "SKIP_PUBLISH=0"
 set "SKIP_TESTS=0"
-set "STABLE_GATE=0"
 
 :argloop
 if "%~1"=="" goto :argsdone
 if /i "%~1"=="-SkipPublish" set "SKIP_PUBLISH=1" & shift & goto :argloop
 if /i "%~1"=="-SkipTests" set "SKIP_TESTS=1" & shift & goto :argloop
-if /i "%~1"=="-StableGate" set "STABLE_GATE=1" & shift & goto :argloop
 if /i "%~1"=="-FrameworkDependent" set "FW_DEP=1" & shift & goto :argloop
 if /i "%~1"=="-SingleFile" shift & goto :argloop
 if /i "%~1"=="-Runtime" (
@@ -56,8 +53,6 @@ if not exist "%NUGET_APPDATA%\NuGet" (
 )
 set "APPDATA=%NUGET_APPDATA%"
 
-if "%STABLE_GATE%"=="1" goto :run_gate
-
 :call_restore_build_test
 echo [publish.cmd] build/test chain via repo-local APPDATA ...
 set "BUILD_CHAIN=set APPDATA=%NUGET_APPDATA%& mkdir %NUGET_APPDATA%\NuGet 2>nul & cd /d %ROOT% & del /q WinDFIR.UI\obj\*.tmp 2>nul & del /q WinDFIR.Tests\obj\*.tmp 2>nul & dotnet restore WinDFIR.sln -v minimal --disable-parallel && dotnet build WinDFIR.sln -c Release --no-restore -v minimal"
@@ -73,20 +68,6 @@ if "%SKIP_PUBLISH%"=="1" (
   exit /b 0
 )
 goto :do_publish_sign_exit
-
-:run_gate
-echo [publish.cmd] Stable gate: scripts\InvokeStableReleaseGate.ps1 ...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\InvokeStableReleaseGate.ps1"
-set "GE=!ERRORLEVEL!"
-if not "!GE!"=="0" (
-  echo publish.cmd: ERROR stable gate failed (exit !GE!^).
-  exit /b 1
-)
-if "%SKIP_PUBLISH%"=="1" (
-  echo [publish.cmd] Gate OK; -SkipPublish: done.
-  exit /b 0
-)
-echo [publish.cmd] Gate OK; publishing...
 
 :do_publish_sign_exit
 set "PUBLISH_ARGS=-c Release -o Release -r %RUNTIME% -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=none --no-restore"
